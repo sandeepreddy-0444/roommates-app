@@ -1,45 +1,273 @@
 "use client";
 
-import { useState } from "react";
-import GroceryPanel from "@/components/GroceryPanel";
-import ExpensesPanel from "@/components/ExpensesPanel";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { onAuthStateChanged, signOut } from "firebase/auth";
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  onSnapshot,
+  setDoc,
+} from "firebase/firestore";
+import { auth, db } from "@/app/lib/firebase";
+
+import ExpensesPanel from "../../components/ExpensesPanel";
+import GroceryPanel from "../../components/GroceryPanel";
+import RoommatesPanel from "../../components/RoommatesPanel";
+
+type Tab = "expenses" | "groceries" | "roommates";
+type Roommate = { uid: string; name: string };
 
 export default function DashboardPage() {
-  const [tab, setTab] = useState<"expenses" | "grocery">("expenses");
+  const router = useRouter();
+
+  const [tab, setTab] = useState<Tab>("expenses");
+  const [authChecked, setAuthChecked] = useState(false);
+
+  const [uid, setUid] = useState<string | null>(null);
+  const [groupId, setGroupId] = useState<string | null>(null);
+
+  const [createdBy, setCreatedBy] = useState<string | null>(null);
+  const [myName, setMyName] = useState<string>("");
+
+  const [roommates, setRoommates] = useState<Roommate[]>([]);
+
+  const loading = useMemo(() => !authChecked, [authChecked]);
+
+  // ✅ Auth + load user info + group creator
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (u) => {
+      if (!u) {
+        setAuthChecked(true);
+        router.push("/login");
+        return;
+      }
+
+      setUid(u.uid);
+
+      const userSnap = await getDoc(doc(db, "users", u.uid));
+      const userData = userSnap.exists() ? (userSnap.data() as any) : {};
+
+      const gid = userData?.groupId || null;
+      setGroupId(gid);
+
+      setMyName(userData?.name || "");
+
+      // ✅ load group creator
+      if (gid) {
+        const groupSnap = await getDoc(doc(db, "groups", gid));
+        const groupData = groupSnap.exists() ? (groupSnap.data() as any) : {};
+        setCreatedBy(groupData?.createdBy || null);
+      }
+
+      setAuthChecked(true);
+
+      if (!gid) router.push("/room");
+    });
+
+    return () => unsub();
+  }, [router]);
+
+  // ✅ Listen to members and fetch each member's name from users/{uid}
+  useEffect(() => {
+    if (!groupId) return;
+
+    const unsub = onSnapshot(
+      collection(db, "groups", groupId, "members"),
+      async (snap) => {
+        const memberUids = snap.docs.map((d) => d.id);
+
+        const userDocs = await Promise.all(
+          memberUids.map((id) => getDoc(doc(db, "users", id)))
+        );
+
+        const results: Roommate[] = userDocs.map((docSnap, index) => {
+          const id = memberUids[index];
+          const data = docSnap.exists() ? (docSnap.data() as any) : {};
+          return {
+            uid: id,
+            name: data?.name || id.slice(0, 6),
+          };
+        });
+
+        // Put you first
+        results.sort((a, b) => (a.uid === uid ? -1 : b.uid === uid ? 1 : 0));
+        setRoommates(results);
+      }
+    );
+
+    return () => unsub();
+  }, [groupId, uid]);
+
+  // ✅ Everyone can leave
+  const leaveRoom = async () => {
+    if (!uid || !groupId) return;
+
+    const ok = confirm("Are you sure you want to leave this room?");
+    if (!ok) return;
+
+    await deleteDoc(doc(db, "groups", groupId, "members", uid));
+    await setDoc(doc(db, "users", uid), { groupId: null }, { merge: true });
+
+    router.push("/room");
+  };
+
+  // ✅ Only creator can remove others
+  const removeRoommate = async (memberUid: string) => {
+    if (!uid || !groupId) return;
+    if (uid !== createdBy) return;
+    if (memberUid === uid) return;
+
+    const ok = confirm("Remove this roommate from the room?");
+    if (!ok) return;
+
+    await deleteDoc(doc(db, "groups", groupId, "members", memberUid));
+    await setDoc(doc(db, "users", memberUid), { groupId: null }, { merge: true });
+  };
+
+  const logout = async () => {
+    await signOut(auth);
+    router.push("/login");
+  };
+
+  if (loading) return <div style={{ padding: 16 }}>Loading...</div>;
+
+  const isCreator = uid !== null && uid === createdBy;
 
   return (
-    <main className="p-4">
-      <h1 className="text-xl font-semibold mb-4">Dashboard</h1>
+    <div style={{ minHeight: "100vh", display: "flex", gap: 16, padding: 16 }}>
+      {/* LEFT SIDEBAR */}
+      <div
+        style={{
+          width: 260,
+          border: "1px solid #2b2b2b",
+          borderRadius: 14,
+          padding: 12,
+          height: "fit-content",
+        }}
+      >
+        <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 12 }}>
+          Dashboard
+        </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-6">
-        {/* LEFT BUTTONS */}
-        <aside className="border rounded p-3 h-fit">
-          <div className="flex flex-col gap-2">
-            <button
-              onClick={() => setTab("expenses")}
-              className={`border px-4 py-2 rounded text-left ${
-                tab === "expenses" ? "bg-black text-white" : ""
-              }`}
-            >
-              Expenses
-            </button>
+        <SidebarButton
+          label="Expenses"
+          active={tab === "expenses"}
+          onClick={() => setTab("expenses")}
+        />
+        <SidebarButton
+          label="Grocery List"
+          active={tab === "groceries"}
+          onClick={() => setTab("groceries")}
+        />
+        <SidebarButton
+          label="Roommates"
+          active={tab === "roommates"}
+          onClick={() => setTab("roommates")}
+        />
 
-            <button
-              onClick={() => setTab("grocery")}
-              className={`border px-4 py-2 rounded text-left ${
-                tab === "grocery" ? "bg-black text-white" : ""
-              }`}
-            >
-              Grocery List
-            </button>
-          </div>
-        </aside>
+        <button
+  onClick={logout}
+  style={{
+    marginTop: 12,
+    width: "100%",
+    padding: 10,
+    borderRadius: 12,
+    border: "1px solid #2b2b2b",
+    background: "transparent",
+    color: "white",
+    cursor: "pointer",
+  }}
+>
+  Logout
+</button>
 
-        {/* RIGHT CONTENT */}
-        <section className="border rounded p-4">
-          {tab === "expenses" ? <ExpensesPanel /> : <GroceryPanel />}
-        </section>
       </div>
-    </main>
+
+      {/* MAIN CONTENT */}
+      <div
+        style={{
+          flex: 1,
+          border: "1px solid #2b2b2b",
+          borderRadius: 14,
+          padding: 16,
+        }}
+      >
+        {tab === "expenses" && <ExpensesPanel />}
+        {tab === "groceries" && <GroceryPanel />}
+
+        {tab === "roommates" && (
+          <div>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 12,
+              }}
+            >
+              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>
+                Roommates
+              </h2>
+
+              <button
+                onClick={leaveRoom}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: 10,
+                  border: "1px solid #555",
+                  background: "transparent",
+                  color: "white",
+                  cursor: "pointer",
+                }}
+              >
+                Leave Room
+              </button>
+            </div>
+
+            <RoommatesPanel
+              roommates={roommates.map((r) => ({
+                uid: r.uid,
+                name: r.uid === uid ? (myName || r.name) : r.name,
+              }))}
+              myUid={uid ?? ""}
+              isCreator={isCreator}
+              onRemove={removeRoommate}
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SidebarButton({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        width: "100%",
+        textAlign: "left",
+        padding: 12,
+        borderRadius: 12,
+        border: "1px solid #2b2b2b",
+        marginBottom: 10,
+        background: active ? "#111" : "transparent",
+        color: "white",
+        cursor: "pointer",
+      }}
+    >
+      {label}
+    </button>
   );
 }

@@ -25,8 +25,8 @@ export default function SignupPage() {
       await updateProfile(cred.user, { displayName: name });
 
       await setDoc(doc(db, "users", cred.user.uid), {
-        name,
-        email,
+        name: name,
+        email: email,
         groupId: null,
         createdAt: serverTimestamp(),
       });

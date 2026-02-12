@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { onAuthStateChanged, signOut } from "firebase/auth";
+import { onAuthStateChanged } from "firebase/auth";
 import {
   addDoc,
   collection,
@@ -46,12 +46,18 @@ export default function ExpensesPanel() {
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
-      if (!u) return router.push("/login");
+      if (!u) {
+        router.push("/login");
+        return;
+      }
       setUid(u.uid);
 
       const userDoc = await getDoc(doc(db, "users", u.uid));
-      const gid = userDoc.exists() ? userDoc.data().groupId : null;
-      if (!gid) return router.push("/room");
+      const gid = userDoc.exists() ? (userDoc.data() as any).groupId : null;
+      if (!gid) {
+        router.push("/room");
+        return;
+      }
       setGroupId(gid);
 
       const membersUnsub = onSnapshot(
@@ -59,16 +65,19 @@ export default function ExpensesPanel() {
         async (snap) => {
           const uids = snap.docs.map((d) => d.id);
 
-          const results: Member[] = [];
-          for (const id of uids) {
-            const userSnap = await getDoc(doc(db, "users", id));
-            const data = userSnap.exists() ? userSnap.data() : {};
-            results.push({
+          const userDocs = await Promise.all(
+            uids.map((id) => getDoc(doc(db, "users", id)))
+          );
+
+          const results: Member[] = userDocs.map((docSnap, idx) => {
+            const id = uids[idx];
+            const data = docSnap.exists() ? (docSnap.data() as any) : {};
+            return {
               uid: id,
-              name: (data as any).name ?? "Roommate",
-              email: (data as any).email ?? "",
-            });
-          }
+              name: data?.name ?? "Roommate",
+              email: data?.email ?? "",
+            };
+          });
 
           results.sort((a, b) => a.name.localeCompare(b.name));
           setMembers(results);
@@ -199,22 +208,10 @@ export default function ExpensesPanel() {
     await deleteDoc(doc(db, "groups", groupId, "expenses", expenseId));
   }
 
-  async function logout() {
-    await signOut(auth);
-    router.push("/login");
-  }
-
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">Expenses</h2>
-          <p className="text-sm text-gray-600">Room: {groupId}</p>
-        </div>
-
-        <button onClick={logout} className="border px-4 py-2 rounded">
-          Logout
-        </button>
+      <div>
+        <h2 className="text-lg font-semibold">Expenses</h2>
       </div>
 
       {msg && <p className="text-sm text-red-600">{msg}</p>}
@@ -319,7 +316,6 @@ export default function ExpensesPanel() {
               <div className="flex items-center gap-3">
                 <div className="font-mono">${ex.amount.toFixed(2)}</div>
 
-                {/* ✅ show Delete only for payer */}
                 {uid === ex.paidBy && (
                   <button
                     onClick={() => removeExpense(ex.id, ex.paidBy)}

@@ -19,7 +19,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      router.push("/grocery");
+      router.push("/dashboard");
     } catch (error: any) {
       setErr(error?.message ?? "Login failed");
     } finally {

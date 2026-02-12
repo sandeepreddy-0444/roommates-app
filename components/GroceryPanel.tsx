@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { onAuthStateChanged, signOut } from "firebase/auth";
+import { onAuthStateChanged } from "firebase/auth";
 import {
   addDoc,
   collection,
@@ -41,7 +41,6 @@ export default function GroceryPanel() {
   const router = useRouter();
   const [uid, setUid] = useState<string | null>(null);
   const [groupId, setGroupId] = useState<string | null>(null);
-  const [email, setEmail] = useState<string | null>(null);
 
   const [items, setItems] = useState<GroceryItem[]>([]);
   const [name, setName] = useState("");
@@ -57,13 +56,18 @@ export default function GroceryPanel() {
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
-      if (!u) return router.push("/login");
+      if (!u) {
+        router.push("/login");
+        return;
+      }
       setUid(u.uid);
-      setEmail(u.email ?? null);
 
       const userDoc = await getDoc(doc(db, "users", u.uid));
-      const gid = userDoc.exists() ? userDoc.data().groupId : null;
-      if (!gid) return router.push("/room");
+      const gid = userDoc.exists() ? (userDoc.data() as any).groupId : null;
+      if (!gid) {
+        router.push("/room");
+        return;
+      }
 
       setGroupId(gid);
       setLoading(false);
@@ -128,25 +132,12 @@ export default function GroceryPanel() {
     await deleteDoc(doc(db, "groups", groupId, "grocery", item.id));
   }
 
-  async function logout() {
-    await signOut(auth);
-    router.push("/login");
-  }
-
   if (loading) return <div className="p-2">Loading...</div>;
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">Grocery List</h2>
-          <p className="text-sm text-gray-600">Room: {groupId}</p>
-          <p className="text-sm text-gray-600">Logged in as: {email}</p>
-        </div>
-
-        <button onClick={logout} className="border px-4 py-2 rounded">
-          Logout
-        </button>
+      <div>
+        <h2 className="text-lg font-semibold">Grocery List</h2>
       </div>
 
       <form onSubmit={addItem} className="border rounded-2xl p-4 space-y-3">
