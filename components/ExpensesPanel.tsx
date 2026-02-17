@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import {
   addDoc,
@@ -17,16 +17,19 @@ import { useRouter } from "next/navigation";
 import { auth, db } from "@/app/lib/firebase";
 
 type Member = { uid: string; name: string; email: string };
+
 type Expense = {
   id: string;
   title: string;
   amount: number;
   paidBy: string;
+  participants?: string[];
   createdAt?: any;
 };
 
 export default function ExpensesPanel() {
   const router = useRouter();
+
   const [uid, setUid] = useState<string | null>(null);
   const [groupId, setGroupId] = useState<string | null>(null);
 
@@ -37,6 +40,9 @@ export default function ExpensesPanel() {
   const [amount, setAmount] = useState("");
   const [paidBy, setPaidBy] = useState<string>("");
 
+  // ✅ Split selected people
+  const [selected, setSelected] = useState<Record<string, boolean>>({});
+
   const [msg, setMsg] = useState<string | null>(null);
 
   const expensesCol = useMemo(() => {
@@ -44,6 +50,7 @@ export default function ExpensesPanel() {
     return collection(db, "groups", groupId, "expenses");
   }, [groupId]);
 
+  // ✅ Auth + load groupId
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (!u) {
@@ -54,45 +61,82 @@ export default function ExpensesPanel() {
 
       const userDoc = await getDoc(doc(db, "users", u.uid));
       const gid = userDoc.exists() ? (userDoc.data() as any).groupId : null;
+
       if (!gid) {
         router.push("/room");
         return;
       }
+
       setGroupId(gid);
-
-      const membersUnsub = onSnapshot(
-        collection(db, "groups", gid, "members"),
-        async (snap) => {
-          const uids = snap.docs.map((d) => d.id);
-
-          const userDocs = await Promise.all(
-            uids.map((id) => getDoc(doc(db, "users", id)))
-          );
-
-          const results: Member[] = userDocs.map((docSnap, idx) => {
-            const id = uids[idx];
-            const data = docSnap.exists() ? (docSnap.data() as any) : {};
-            return {
-              uid: id,
-              name: data?.name ?? "Roommate",
-              email: data?.email ?? "",
-            };
-          });
-
-          results.sort((a, b) => a.name.localeCompare(b.name));
-          setMembers(results);
-
-          if (!paidBy && u.uid) setPaidBy(u.uid);
-        }
-      );
-
-      return () => membersUnsub();
+      if (!paidBy) setPaidBy(u.uid);
     });
 
     return () => unsub();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
+  // ✅ HARD BLOCK: If my members/{uid} doc disappears, clear everything + redirect
+  useEffect(() => {
+    if (!groupId || !uid) return;
+
+    const myMemberRef = doc(db, "groups", groupId, "members", uid);
+
+    const unsub = onSnapshot(myMemberRef, (snap) => {
+      if (!snap.exists()) {
+        // I am not a member anymore
+        setMembers([]);
+        setExpenses([]);
+        setGroupId(null);
+        router.push("/room");
+      }
+    });
+
+    return () => unsub();
+  }, [groupId, uid, router]);
+
+  // ✅ Members list
+  useEffect(() => {
+    if (!groupId) return;
+
+    const membersUnsub = onSnapshot(
+      collection(db, "groups", groupId, "members"),
+      async (snap) => {
+        const uids = snap.docs.map((d) => d.id);
+
+        const userDocs = await Promise.all(
+          uids.map((id) => getDoc(doc(db, "users", id)))
+        );
+
+        const results: Member[] = userDocs.map((docSnap, idx) => {
+          const id = uids[idx];
+          const data = docSnap.exists() ? (docSnap.data() as any) : {};
+          return {
+            uid: id,
+            name: data?.name ?? "Roommate",
+            email: data?.email ?? "",
+          };
+        });
+
+        results.sort((a, b) => a.name.localeCompare(b.name));
+        setMembers(results);
+
+        // default paidBy = me (once)
+        if (!paidBy && uid) setPaidBy(uid);
+      }
+    );
+
+    return () => membersUnsub();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupId]);
+
+  // ✅ Default select everyone whenever members change
+  useEffect(() => {
+    const init: Record<string, boolean> = {};
+    members.forEach((m) => (init[m.uid] = true));
+    setSelected(init);
+  }, [members]);
+
+  // ✅ Expenses list
   useEffect(() => {
     if (!expensesCol) return;
 
@@ -105,6 +149,9 @@ export default function ExpensesPanel() {
           title: data.title ?? "",
           amount: Number(data.amount ?? 0),
           paidBy: data.paidBy ?? "",
+          participants: Array.isArray(data.participants)
+            ? (data.participants as string[])
+            : undefined,
           createdAt: data.createdAt,
         };
       });
@@ -119,15 +166,24 @@ export default function ExpensesPanel() {
     return m ? m.name : id.slice(0, 6);
   }
 
+  // ✅ Balances: split only among participants (or all members if old expense)
   const balances = useMemo(() => {
-    const n = members.length || 1;
     const map: Record<string, number> = {};
     for (const m of members) map[m.uid] = 0;
 
-    for (const e of expenses) {
-      const perHead = e.amount / n;
+    const all = members.map((m) => m.uid);
 
-      for (const m of members) map[m.uid] -= perHead;
+    for (const e of expenses) {
+      const parts =
+        e.participants && e.participants.length > 0 ? e.participants : all;
+
+      const denom = parts.length || 1;
+      const perHead = e.amount / denom;
+
+      for (const pid of parts) {
+        if (map[pid] === undefined) map[pid] = 0;
+        map[pid] -= perHead;
+      }
 
       if (map[e.paidBy] === undefined) map[e.paidBy] = 0;
       map[e.paidBy] += e.amount;
@@ -177,6 +233,7 @@ export default function ExpensesPanel() {
     setMsg(null);
 
     if (!expensesCol) return;
+
     const t = title.trim();
     const a = Number(amount);
 
@@ -184,11 +241,15 @@ export default function ExpensesPanel() {
     if (!a || a <= 0) return setMsg("Enter a valid amount");
     if (!paidBy) return setMsg("Select who paid");
 
+    const participants = Object.keys(selected).filter((id) => selected[id]);
+    if (participants.length < 2) return setMsg("Select at least 2 people for split.");
+
     await addDoc(expensesCol, {
       title: t,
       amount: a,
       paidBy,
       splitType: "equal",
+      participants,
       createdAt: serverTimestamp(),
     });
 
@@ -196,7 +257,6 @@ export default function ExpensesPanel() {
     setAmount("");
   }
 
-  // ✅ ONLY payer can delete
   async function removeExpense(expenseId: string, paidById: string) {
     if (!groupId) return;
 
@@ -247,8 +307,30 @@ export default function ExpensesPanel() {
           </select>
         </div>
 
+        <div className="border rounded-2xl p-3">
+          <div className="font-semibold mb-2">Split with</div>
+          <p className="text-sm text-gray-600 mb-3">
+            Uncheck roommates who did NOT participate.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {members.map((m) => (
+              <label key={m.uid} className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={!!selected[m.uid]}
+                  onChange={(e) =>
+                    setSelected((prev) => ({ ...prev, [m.uid]: e.target.checked }))
+                  }
+                />
+                <span>{m.name}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
         <button className="rounded-xl bg-black text-white px-4 py-3">
-          Add Expense (split equal)
+          Add Expense (split selected people)
         </button>
       </form>
 

@@ -132,112 +132,201 @@ export default function DashboardPage() {
     router.push("/login");
   };
 
+  const copyRoomId = async () => {
+    if (!groupId) return;
+    try {
+      await navigator.clipboard.writeText(groupId);
+      alert("Room ID copied!");
+    } catch {
+      alert("Could not copy. Please copy manually.");
+    }
+  };
+
   if (loading) return <div style={{ padding: 16 }}>Loading...</div>;
 
   const isCreator = uid !== null && uid === createdBy;
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", gap: 16, padding: 16 }}>
-      {/* LEFT SIDEBAR */}
+    <div
+      style={{
+        minHeight: "100vh",
+        padding: 16,
+        background: "#0b0b0b",
+        color: "white",
+      }}
+    >
       <div
         style={{
-          width: 260,
-          border: "1px solid #2b2b2b",
-          borderRadius: 14,
-          padding: 12,
-          height: "fit-content",
+          display: "flex",
+          gap: 16,
+          flexWrap: "wrap",
+          alignItems: "flex-start",
         }}
       >
-        <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 12 }}>
-          Dashboard
+        {/* LEFT SIDEBAR */}
+        <div
+          style={{
+            width: 260,
+            maxWidth: "100%",
+            border: "1px solid #2b2b2b",
+            borderRadius: 14,
+            padding: 12,
+            height: "fit-content",
+          }}
+        >
+          <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 12 }}>
+            Dashboard
+          </div>
+
+          <SidebarButton
+            label="Expenses"
+            active={tab === "expenses"}
+            onClick={() => setTab("expenses")}
+          />
+          <SidebarButton
+            label="Grocery List"
+            active={tab === "groceries"}
+            onClick={() => setTab("groceries")}
+          />
+          <SidebarButton
+            label="Roommates"
+            active={tab === "roommates"}
+            onClick={() => setTab("roommates")}
+          />
+
+          <button
+            onClick={logout}
+            style={{
+              marginTop: 12,
+              width: "100%",
+              padding: 10,
+              borderRadius: 12,
+              border: "1px solid #2b2b2b",
+              background: "transparent",
+              color: "white",
+              cursor: "pointer",
+            }}
+          >
+            Logout
+          </button>
         </div>
 
-        <SidebarButton
-          label="Expenses"
-          active={tab === "expenses"}
-          onClick={() => setTab("expenses")}
-        />
-        <SidebarButton
-          label="Grocery List"
-          active={tab === "groceries"}
-          onClick={() => setTab("groceries")}
-        />
-        <SidebarButton
-          label="Roommates"
-          active={tab === "roommates"}
-          onClick={() => setTab("roommates")}
-        />
+        {/* MAIN CONTENT */}
+        <div
+          style={{
+            flex: 1,
+            minWidth: 280,
+            border: "1px solid #2b2b2b",
+            borderRadius: 14,
+            padding: 16,
+            background: "#0f0f0f",
+          }}
+        >
+          {tab === "expenses" && <ExpensesPanel />}
+          {tab === "groceries" && <GroceryPanel />}
 
-        <button
-  onClick={logout}
-  style={{
-    marginTop: 12,
-    width: "100%",
-    padding: 10,
-    borderRadius: 12,
-    border: "1px solid #2b2b2b",
-    background: "transparent",
-    color: "white",
-    cursor: "pointer",
-  }}
->
-  Logout
-</button>
-
-      </div>
-
-      {/* MAIN CONTENT */}
-      <div
-        style={{
-          flex: 1,
-          border: "1px solid #2b2b2b",
-          borderRadius: 14,
-          padding: 16,
-        }}
-      >
-        {tab === "expenses" && <ExpensesPanel />}
-        {tab === "groceries" && <GroceryPanel />}
-
-        {tab === "roommates" && (
-          <div>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: 12,
-              }}
-            >
-              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>
-                Roommates
-              </h2>
-
-              <button
-                onClick={leaveRoom}
+          {tab === "roommates" && (
+            <div>
+              {/* Header */}
+              <div
                 style={{
-                  padding: "8px 12px",
-                  borderRadius: 10,
-                  border: "1px solid #555",
-                  background: "transparent",
-                  color: "white",
-                  cursor: "pointer",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 12,
+                  gap: 10,
+                  flexWrap: "wrap",
                 }}
               >
-                Leave Room
-              </button>
-            </div>
+                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>
+                  Roommates
+                </h2>
 
-            <RoommatesPanel
-              roommates={roommates.map((r) => ({
-                uid: r.uid,
-                name: r.uid === uid ? (myName || r.name) : r.name,
-              }))}
-              myUid={uid ?? ""}
-              isCreator={isCreator}
-              onRemove={removeRoommate}
-            />
-          </div>
-        )}
+                <button
+                  onClick={leaveRoom}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: 10,
+                    border: "1px solid #555",
+                    background: "transparent",
+                    color: "white",
+                    cursor: "pointer",
+                  }}
+                >
+                  Leave Room
+                </button>
+              </div>
+
+              {/* ✅ ROOM ID DISPLAY (ONLY HERE) */}
+              <div
+                style={{
+                  border: "1px solid #2b2b2b",
+                  borderRadius: 12,
+                  padding: 12,
+                  background: "#111",
+                  marginBottom: 12,
+                }}
+              >
+                <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>
+                  Room ID
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <code
+                    style={{
+                      padding: "6px 10px",
+                      borderRadius: 10,
+                      border: "1px solid #2b2b2b",
+                      background: "#0b0b0b",
+                      fontSize: 12,
+                      wordBreak: "break-all",
+                    }}
+                  >
+                    {groupId ?? "No room joined"}
+                  </code>
+
+                  {groupId && (
+                    <button
+                      onClick={copyRoomId}
+                      style={{
+                        padding: "8px 12px",
+                        borderRadius: 10,
+                        border: "1px solid #2b2b2b",
+                        background: "transparent",
+                        color: "white",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Copy
+                    </button>
+                  )}
+                </div>
+
+                {/* ✅ Friendly helper text */}
+                <div style={{ fontSize: 12, opacity: 0.7, marginTop: 6 }}>
+                  Share this Room ID with your roommates so they can join.
+                </div>
+              </div>
+
+              <RoommatesPanel
+                roommates={roommates.map((r) => ({
+                  uid: r.uid,
+                  name: r.uid === uid ? (myName || r.name) : r.name,
+                }))}
+                myUid={uid ?? ""}
+                isCreator={isCreator}
+                onRemove={removeRoommate}
+              />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
