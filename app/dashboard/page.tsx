@@ -10,9 +10,6 @@ import {
   getDoc,
   onSnapshot,
   setDoc,
-  where,
-  query,
-  orderBy,
   updateDoc,
 } from "firebase/firestore";
 import { auth, db } from "@/app/lib/firebase";
@@ -20,8 +17,9 @@ import { auth, db } from "@/app/lib/firebase";
 import ExpensesPanel from "../../components/ExpensesPanel";
 import GroceryPanel from "../../components/GroceryPanel";
 import RoommatesPanel from "../../components/RoommatesPanel";
+import NotificationsPanel from "../../components/NotificationsPanel";
 
-type Tab = "expenses" | "groceries" | "roommates";
+type Tab = "expenses" | "groceries" | "roommates" | "notifications";
 type Roommate = { uid: string; name: string };
 
 export default function DashboardPage() {
@@ -156,17 +154,55 @@ export default function DashboardPage() {
   if (loading) return <div style={{ padding: 16 }}>Loading...</div>;
 
   return (
-    <div style={{ minHeight: "100vh", padding: 16, background: "#0b0b0b", color: "white" }}>
+    <div
+      style={{
+        minHeight: "100vh",
+        padding: 16,
+        background: "#0b0b0b",
+        color: "white",
+      }}
+    >
       <div style={{ display: "flex", gap: 16 }}>
         {/* Sidebar */}
-        <div style={{ width: 260, border: "1px solid #2b2b2b", borderRadius: 14, padding: 12 }}>
+        <div
+          style={{
+            width: 260,
+            border: "1px solid #2b2b2b",
+            borderRadius: 14,
+            padding: 12,
+          }}
+        >
           <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 12 }}>
             Dashboard
           </div>
 
-          <button onClick={() => setTab("expenses")} style={{ marginBottom: 10, width: "100%" }}>Expenses</button>
-          <button onClick={() => setTab("groceries")} style={{ marginBottom: 10, width: "100%" }}>Grocery</button>
-          <button onClick={() => setTab("roommates")} style={{ marginBottom: 10, width: "100%" }}>Roommates</button>
+          <button
+            onClick={() => setTab("expenses")}
+            style={{ marginBottom: 10, width: "100%" }}
+          >
+            Expenses
+          </button>
+
+          <button
+            onClick={() => setTab("groceries")}
+            style={{ marginBottom: 10, width: "100%" }}
+          >
+            Grocery
+          </button>
+
+          <button
+            onClick={() => setTab("roommates")}
+            style={{ marginBottom: 10, width: "100%" }}
+          >
+            Roommates
+          </button>
+
+          <button
+            onClick={() => setTab("notifications")}
+            style={{ marginBottom: 10, width: "100%" }}
+          >
+            Notifications
+          </button>
 
           <button onClick={logout} style={{ marginTop: 12, width: "100%" }}>
             Logout
@@ -174,7 +210,14 @@ export default function DashboardPage() {
         </div>
 
         {/* Main */}
-        <div style={{ flex: 1, border: "1px solid #2b2b2b", borderRadius: 14, padding: 16 }}>
+        <div
+          style={{
+            flex: 1,
+            border: "1px solid #2b2b2b",
+            borderRadius: 14,
+            padding: 16,
+          }}
+        >
           {tab === "expenses" && <ExpensesPanel />}
           {tab === "groceries" && <GroceryPanel />}
           {tab === "roommates" && (
@@ -188,9 +231,9 @@ export default function DashboardPage() {
               onLeave={leaveRoom}
             />
           )}
+          {tab === "notifications" && <NotificationsPanel />}
         </div>
       </div>
     </div>
   );
-}// redeploy
-// force redeploy
+}
