@@ -28,14 +28,21 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-6">
-      <div className="w-full max-w-md rounded-2xl border p-6">
-        <h1 className="text-2xl font-semibold">Roommates</h1>
-        <p className="text-sm text-gray-600 mt-1">Login to continue</p>
+    <main className="min-h-screen flex items-center justify-center p-6 bg-black text-white">
+      <div className="w-full max-w-md rounded-2xl border border-neutral-800 bg-neutral-950 p-6">
+        {/* ✅ Brand header */}
+        <div className="text-center">
+          <div className="text-6xl leading-none">🏘️</div>
+          <h1 className="text-3xl font-extrabold mt-3">Roommates</h1>
+          <p className="text-sm text-neutral-400 mt-1">
+            Split bills • Track groceries • Stay organized
+          </p>
+        </div>
 
+        {/* ✅ Form */}
         <form onSubmit={onSubmit} className="mt-6 space-y-4">
           <input
-            className="w-full rounded-xl border p-3"
+            className="w-full rounded-xl border border-neutral-800 bg-transparent p-3 text-white placeholder:text-neutral-500 outline-none focus:ring-2 focus:ring-neutral-700"
             type="email"
             placeholder="Email"
             value={email}
@@ -43,7 +50,7 @@ export default function LoginPage() {
             required
           />
           <input
-            className="w-full rounded-xl border p-3"
+            className="w-full rounded-xl border border-neutral-800 bg-transparent p-3 text-white placeholder:text-neutral-500 outline-none focus:ring-2 focus:ring-neutral-700"
             type="password"
             placeholder="Password"
             value={password}
@@ -51,19 +58,19 @@ export default function LoginPage() {
             required
           />
 
-          {err && <p className="text-red-600 text-sm">{err}</p>}
+          {err && <p className="text-red-400 text-sm">{err}</p>}
 
           <button
             disabled={loading}
-            className="w-full rounded-xl bg-black text-white p-3 disabled:opacity-60"
+            className="w-full rounded-xl bg-white text-black p-3 font-semibold disabled:opacity-60"
           >
             {loading ? "Logging in..." : "Login"}
           </button>
         </form>
 
-        <p className="text-sm mt-4">
+        <p className="text-sm mt-4 text-neutral-300">
           Don’t have an account?{" "}
-          <Link href="/signup" className="underline">
+          <Link href="/signup" className="underline text-white">
             Sign up
           </Link>
         </p>

@@ -4,62 +4,88 @@ type Props = {
   roommates: { uid: string; name: string }[];
   isCreator: boolean;
   myUid: string;
-  onRemove: (memberUid: string) => void;
+  createdByUid: string | null;
+
+  onRemove: (uid: string) => void;
+  onTransferAdmin: (uid: string) => void;
+  onLeave: () => void;
 };
 
-export default function RoommatesPanel({ roommates, isCreator, myUid, onRemove }: Props) {
+export default function RoommatesPanel({
+  roommates,
+  isCreator,
+  myUid,
+  createdByUid,
+  onRemove,
+  onTransferAdmin,
+  onLeave,
+}: Props) {
   return (
-    <div>
-      {roommates.length === 0 ? (
-        <p style={{ opacity: 0.6 }}>No roommates found</p>
-      ) : (
-        <div style={{ display: "grid", gap: "10px" }}>
-          {roommates.map((r) => (
-            <div
-              key={r.uid}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 12,
-                padding: 12,
-                border: "1px solid #e5e7eb",
-                borderRadius: 14,
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div
+    <div style={{ display: "grid", gap: 14 }}>
+      <button
+        onClick={onLeave}
+        style={{
+          padding: "10px 14px",
+          borderRadius: 12,
+          border: "1px solid red",
+          background: "transparent",
+          color: "red",
+          cursor: "pointer",
+          width: "150px",
+        }}
+      >
+        Leave Room
+      </button>
+
+      {roommates.map((r) => {
+        const isMe = r.uid === myUid;
+        const isAdmin = r.uid === createdByUid;
+
+        return (
+          <div
+            key={r.uid}
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              padding: 12,
+              border: "1px solid #333",
+              borderRadius: 12,
+              background: "#111",
+              color: "white",
+            }}
+          >
+            <div>
+              {r.name} {isMe ? "(You)" : ""}{" "}
+              {isAdmin && <span style={{ opacity: 0.7 }}>• Admin</span>}
+            </div>
+
+            <div style={{ display: "flex", gap: 8 }}>
+              {isCreator && !isMe && !isAdmin && (
+                <button
+                  onClick={() => onTransferAdmin(r.uid)}
                   style={{
-                    width: 38,
-                    height: 38,
-                    borderRadius: 12,
-                    border: "1px solid #e5e7eb",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontWeight: 800,
-                    background: "#f9fafb",
-                    color: "#111",
+                    padding: "6px 10px",
+                    borderRadius: 8,
+                    border: "1px solid #3b82f6",
+                    background: "transparent",
+                    color: "#3b82f6",
+                    cursor: "pointer",
                   }}
                 >
-                  {r.name?.[0]?.toUpperCase()}
-                </div>
+                  Make Admin
+                </button>
+              )}
 
-                <div style={{ fontWeight: 700 }}>
-                  {r.name} {r.uid === myUid ? "(You)" : ""}
-                </div>
-              </div>
-
-              {/* ✅ Remove only if creator, and not yourself */}
-              {isCreator && r.uid !== myUid && (
+              {isCreator && !isMe && (
                 <button
                   onClick={() => onRemove(r.uid)}
                   style={{
-                    padding: "8px 12px",
-                    borderRadius: 10,
-                    border: "1px solid #ff4d4f",
+                    padding: "6px 10px",
+                    borderRadius: 8,
+                    border: "1px solid red",
                     background: "transparent",
-                    color: "#ff4d4f",
+                    color: "red",
                     cursor: "pointer",
                   }}
                 >
@@ -67,9 +93,9 @@ export default function RoommatesPanel({ roommates, isCreator, myUid, onRemove }
                 </button>
               )}
             </div>
-          ))}
-        </div>
-      )}
+          </div>
+        );
+      })}
     </div>
   );
 }

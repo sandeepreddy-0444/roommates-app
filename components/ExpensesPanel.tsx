@@ -12,6 +12,7 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  writeBatch,
 } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { auth, db } from "@/app/lib/firebase";
@@ -25,6 +26,7 @@ type Expense = {
   paidBy: string;
   participants?: string[];
   createdAt?: any;
+  settledAt?: any | null;
 };
 
 export default function ExpensesPanel() {
@@ -44,11 +46,37 @@ export default function ExpensesPanel() {
   const [selected, setSelected] = useState<Record<string, boolean>>({});
 
   const [msg, setMsg] = useState<string | null>(null);
+  const [settling, setSettling] = useState(false);
 
   const expensesCol = useMemo(() => {
     if (!groupId) return null;
     return collection(db, "groups", groupId, "expenses");
   }, [groupId]);
+
+  const notificationsCol = useMemo(() => {
+    if (!groupId) return null;
+    return collection(db, "groups", groupId, "notifications");
+  }, [groupId]);
+
+  const settlementsCol = useMemo(() => {
+    if (!groupId) return null;
+    return collection(db, "groups", groupId, "settlements");
+  }, [groupId]);
+
+  async function pushNotification(payload: {
+    type: string;
+    title: string;
+    body: string;
+    meta?: any;
+  }) {
+    if (!notificationsCol || !uid) return;
+    await addDoc(notificationsCol, {
+      ...payload,
+      createdAt: serverTimestamp(),
+      createdBy: uid,
+      readBy: [],
+    });
+  }
 
   // ✅ Auth + load groupId
   useEffect(() => {
@@ -83,7 +111,6 @@ export default function ExpensesPanel() {
 
     const unsub = onSnapshot(myMemberRef, (snap) => {
       if (!snap.exists()) {
-        // I am not a member anymore
         setMembers([]);
         setExpenses([]);
         setGroupId(null);
@@ -120,7 +147,6 @@ export default function ExpensesPanel() {
         results.sort((a, b) => a.name.localeCompare(b.name));
         setMembers(results);
 
-        // default paidBy = me (once)
         if (!paidBy && uid) setPaidBy(uid);
       }
     );
@@ -153,6 +179,7 @@ export default function ExpensesPanel() {
             ? (data.participants as string[])
             : undefined,
           createdAt: data.createdAt,
+          settledAt: data.settledAt ?? null,
         };
       });
       setExpenses(rows);
@@ -166,14 +193,19 @@ export default function ExpensesPanel() {
     return m ? m.name : id.slice(0, 6);
   }
 
-  // ✅ Balances: split only among participants (or all members if old expense)
+  const unsettledExpenses = useMemo(
+    () => expenses.filter((e) => !e.settledAt),
+    [expenses]
+  );
+
+  // ✅ Balances: only UNSETTLED expenses
   const balances = useMemo(() => {
     const map: Record<string, number> = {};
     for (const m of members) map[m.uid] = 0;
 
     const all = members.map((m) => m.uid);
 
-    for (const e of expenses) {
+    for (const e of unsettledExpenses) {
       const parts =
         e.participants && e.participants.length > 0 ? e.participants : all;
 
@@ -190,7 +222,7 @@ export default function ExpensesPanel() {
     }
 
     return map;
-  }, [expenses, members]);
+  }, [unsettledExpenses, members]);
 
   const settleUps = useMemo(() => {
     const eps = 0.01;
@@ -242,7 +274,8 @@ export default function ExpensesPanel() {
     if (!paidBy) return setMsg("Select who paid");
 
     const participants = Object.keys(selected).filter((id) => selected[id]);
-    if (participants.length < 2) return setMsg("Select at least 2 people for split.");
+    if (participants.length < 2)
+      return setMsg("Select at least 2 people for split.");
 
     await addDoc(expensesCol, {
       title: t,
@@ -251,13 +284,21 @@ export default function ExpensesPanel() {
       splitType: "equal",
       participants,
       createdAt: serverTimestamp(),
+      settledAt: null,
+    });
+
+    await pushNotification({
+      type: "expense_added",
+      title: "Expense added",
+      body: `${nameOf(paidBy)} added "${t}" • $${a.toFixed(2)}`,
+      meta: { title: t, amount: a, paidBy, participants },
     });
 
     setTitle("");
     setAmount("");
   }
 
-  async function removeExpense(expenseId: string, paidById: string) {
+  async function removeExpense(expenseId: string, paidById: string, expenseTitle: string, expenseAmount: number) {
     if (!groupId) return;
 
     if (!uid || uid !== paidById) {
@@ -266,6 +307,59 @@ export default function ExpensesPanel() {
     }
 
     await deleteDoc(doc(db, "groups", groupId, "expenses", expenseId));
+
+    await pushNotification({
+      type: "expense_deleted",
+      title: "Expense deleted",
+      body: `${nameOf(paidById)} deleted "${expenseTitle}" • $${expenseAmount.toFixed(2)}`,
+      meta: { expenseId },
+    });
+  }
+
+  async function settleAll() {
+    setMsg(null);
+    if (!groupId || !uid) return;
+    if (settleUps.length === 0) return;
+
+    try {
+      setSettling(true);
+
+      const batch = writeBatch(db);
+
+      // 1) Mark all UNSETTLED expenses as settled
+      for (const ex of unsettledExpenses) {
+        batch.update(doc(db, "groups", groupId, "expenses", ex.id), {
+          settledAt: serverTimestamp(),
+        });
+      }
+
+      // 2) Record settlements (who pays who)
+      if (settlementsCol) {
+        for (const t of settleUps) {
+          const ref = doc(settlementsCol); // auto id
+          batch.set(ref, {
+            from: t.from,
+            to: t.to,
+            amount: t.amount,
+            createdAt: serverTimestamp(),
+            createdBy: uid,
+          });
+        }
+      }
+
+      await batch.commit();
+
+      await pushNotification({
+        type: "settled",
+        title: "Group settled up",
+        body: `${nameOf(uid)} settled up (${settleUps.length} payment${settleUps.length === 1 ? "" : "s"})`,
+        meta: { transfers: settleUps },
+      });
+    } catch (err: any) {
+      setMsg(err?.message ?? "Settlement failed");
+    } finally {
+      setSettling(false);
+    }
   }
 
   return (
@@ -320,7 +414,10 @@ export default function ExpensesPanel() {
                   type="checkbox"
                   checked={!!selected[m.uid]}
                   onChange={(e) =>
-                    setSelected((prev) => ({ ...prev, [m.uid]: e.target.checked }))
+                    setSelected((prev) => ({
+                      ...prev,
+                      [m.uid]: e.target.checked,
+                    }))
                   }
                 />
                 <span>{m.name}</span>
@@ -349,17 +446,30 @@ export default function ExpensesPanel() {
               </div>
             </div>
           ))}
-          {members.length === 0 && (
-            <p className="text-gray-600">No members found.</p>
-          )}
+          {members.length === 0 && <p className="text-gray-600">No members found.</p>}
         </div>
       </div>
 
       <div className="border rounded-2xl p-4">
-        <h3 className="font-semibold">Who owes who</h3>
-        <p className="text-sm text-gray-600 mt-1">
-          Suggested payments to settle everything
-        </p>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="font-semibold">Who owes who</h3>
+            <p className="text-sm text-gray-600 mt-1">
+              Suggested payments to settle everything (unsettled only)
+            </p>
+          </div>
+
+          {settleUps.length > 0 && (
+            <button
+              type="button"
+              onClick={settleAll}
+              disabled={settling}
+              className="text-sm border px-4 py-2 rounded bg-white text-black disabled:opacity-60"
+            >
+              {settling ? "Settling..." : "Settle up"}
+            </button>
+          )}
+        </div>
 
         <div className="mt-3 space-y-2">
           {settleUps.length === 0 ? (
@@ -389,7 +499,15 @@ export default function ExpensesPanel() {
               className="border rounded-2xl p-4 flex items-center justify-between"
             >
               <div>
-                <div className="font-medium">{ex.title}</div>
+                <div className="font-medium flex items-center gap-2">
+                  <span>{ex.title}</span>
+                  {ex.settledAt ? (
+                    <span className="text-xs px-2 py-1 rounded border text-gray-600">
+                      Settled
+                    </span>
+                  ) : null}
+                </div>
+
                 <div className="text-sm text-gray-600">
                   Paid by: {nameOf(ex.paidBy)}
                 </div>
@@ -398,9 +516,9 @@ export default function ExpensesPanel() {
               <div className="flex items-center gap-3">
                 <div className="font-mono">${ex.amount.toFixed(2)}</div>
 
-                {uid === ex.paidBy && (
+                {uid === ex.paidBy && !ex.settledAt && (
                   <button
-                    onClick={() => removeExpense(ex.id, ex.paidBy)}
+                    onClick={() => removeExpense(ex.id, ex.paidBy, ex.title, ex.amount)}
                     className="text-sm border px-3 py-2 rounded text-red-600"
                   >
                     Delete
