@@ -54,12 +54,15 @@ export default function DashboardPage() {
       setGroupId(gid);
 
       if (!gid) {
+        setAuthChecked(true);
         router.push("/room");
-      } else {
-        const groupSnap = await getDoc(doc(db, "groups", gid));
-        const groupData = groupSnap.exists() ? (groupSnap.data() as any) : {};
-        setCreatedBy(groupData?.createdBy || null);
+        return;
       }
+
+      // Load group admin
+      const groupSnap = await getDoc(doc(db, "groups", gid));
+      const groupData = groupSnap.exists() ? (groupSnap.data() as any) : {};
+      setCreatedBy(groupData?.createdBy || null);
 
       setAuthChecked(true);
     });
@@ -89,12 +92,17 @@ export default function DashboardPage() {
           };
         });
 
+        // Put me at top if possible
+        list.sort((a, b) =>
+          a.uid === uid ? -1 : b.uid === uid ? 1 : 0
+        );
+
         setRoommates(list);
       }
     );
 
     return () => unsub();
-  }, [groupId]);
+  }, [groupId, uid]);
 
   // 🧹 Remove Member
   const removeMember = async (memberUid: string) => {
@@ -105,7 +113,11 @@ export default function DashboardPage() {
     if (!ok) return;
 
     await deleteDoc(doc(db, "groups", groupId, "members", memberUid));
-    await setDoc(doc(db, "users", memberUid), { groupId: null }, { merge: true });
+    await setDoc(
+      doc(db, "users", memberUid),
+      { groupId: null },
+      { merge: true }
+    );
 
     alert("Roommate removed ✅");
   };
@@ -118,11 +130,9 @@ export default function DashboardPage() {
     const ok = confirm("Transfer admin to this roommate?");
     if (!ok) return;
 
-    await updateDoc(doc(db, "groups", groupId), {
-      createdBy: newAdminUid,
-    });
-
+    await updateDoc(doc(db, "groups", groupId), { createdBy: newAdminUid });
     setCreatedBy(newAdminUid);
+
     alert("Admin transferred ✅");
   };
 
@@ -176,31 +186,19 @@ export default function DashboardPage() {
             Dashboard
           </div>
 
-          <button
-            onClick={() => setTab("expenses")}
-            style={{ marginBottom: 10, width: "100%" }}
-          >
+          <button onClick={() => setTab("expenses")} style={{ marginBottom: 10, width: "100%" }}>
             Expenses
           </button>
 
-          <button
-            onClick={() => setTab("groceries")}
-            style={{ marginBottom: 10, width: "100%" }}
-          >
+          <button onClick={() => setTab("groceries")} style={{ marginBottom: 10, width: "100%" }}>
             Grocery
           </button>
 
-          <button
-            onClick={() => setTab("roommates")}
-            style={{ marginBottom: 10, width: "100%" }}
-          >
+          <button onClick={() => setTab("roommates")} style={{ marginBottom: 10, width: "100%" }}>
             Roommates
           </button>
 
-          <button
-            onClick={() => setTab("notifications")}
-            style={{ marginBottom: 10, width: "100%" }}
-          >
+          <button onClick={() => setTab("notifications")} style={{ marginBottom: 10, width: "100%" }}>
             Notifications
           </button>
 
@@ -222,6 +220,7 @@ export default function DashboardPage() {
           {tab === "groceries" && <GroceryPanel />}
           {tab === "roommates" && (
             <RoommatesPanel
+              groupId={groupId ?? ""}   // ✅ this is your Room ID
               roommates={roommates}
               myUid={uid ?? ""}
               isCreator={uid === createdBy}
