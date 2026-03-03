@@ -8,7 +8,6 @@ import {
   sendPasswordResetEmail,
 } from "firebase/auth";
 import {
-  arrayUnion,
   collection,
   deleteDoc,
   doc,
@@ -19,7 +18,6 @@ import {
   query,
   setDoc,
   updateDoc,
-  writeBatch,
 } from "firebase/firestore";
 import { auth, db } from "@/app/lib/firebase";
 
@@ -28,9 +26,15 @@ import GroceryPanel from "../../components/GroceryPanel";
 import RoommatesPanel from "../../components/RoommatesPanel";
 import NotificationsPanel from "../../components/NotificationsPanel";
 
-type Tab = "profile" | "expenses" | "groceries" | "roommates" | "notifications";
-type Roommate = { uid: string; name: string };
+type Tab =
+  | "profile"
+  | "thisMonth"
+  | "expenses"
+  | "groceries"
+  | "roommates"
+  | "notifications";
 
+type Roommate = { uid: string; name: string };
 type MonthKey = { year: number; month: number }; // month: 0-11
 
 export default function DashboardPage() {
@@ -49,25 +53,24 @@ export default function DashboardPage() {
   const [roommates, setRoommates] = useState<Roommate[]>([]);
 
   // Month selector
-  const now = useMemo(() => new Date(), []);
+  const baseNow = useMemo(() => new Date(), []);
   const [selectedMonth, setSelectedMonth] = useState<MonthKey>({
-    year: now.getFullYear(),
-    month: now.getMonth(),
+    year: baseNow.getFullYear(),
+    month: baseNow.getMonth(),
   });
 
-  // Monthly stats (for selected month)
+  // Monthly stats
   const [monthTotal, setMonthTotal] = useState<number>(0);
   const [monthCount, setMonthCount] = useState<number>(0);
   const [youPaid, setYouPaid] = useState<number>(0);
   const [youOwe, setYouOwe] = useState<number>(0);
   const [net, setNet] = useState<number>(0);
 
-  // Unread notifications count for bell badge
+  // Bell badge
   const [unreadNotifs, setUnreadNotifs] = useState<number>(0);
 
   const loading = useMemo(() => !authChecked, [authChecked]);
 
-  // Use Firestore name (from roommates list) if possible
   const myName = useMemo(() => {
     const fromRoommates =
       uid ? roommates.find((r) => r.uid === uid)?.name : undefined;
@@ -79,12 +82,11 @@ export default function DashboardPage() {
     return getInitials(base);
   }, [myName, email]);
 
-  // Month options (current + previous 11)
   const monthOptions = useMemo(() => {
     const out: MonthKey[] = [];
-    const base = new Date();
+    const d0 = new Date();
     for (let i = 0; i < 12; i++) {
-      const d = new Date(base.getFullYear(), base.getMonth() - i, 1);
+      const d = new Date(d0.getFullYear(), d0.getMonth() - i, 1);
       out.push({ year: d.getFullYear(), month: d.getMonth() });
     }
     return out;
@@ -125,7 +127,7 @@ export default function DashboardPage() {
     return () => unsub();
   }, [router]);
 
-  // Load roommates
+  // Roommates list
   useEffect(() => {
     if (!groupId) return;
 
@@ -141,13 +143,9 @@ export default function DashboardPage() {
         const list: Roommate[] = userDocs.map((docSnap, i) => {
           const id = ids[i];
           const data = docSnap.exists() ? (docSnap.data() as any) : {};
-          return {
-            uid: id,
-            name: data?.name || id.slice(0, 6),
-          };
+          return { uid: id, name: data?.name || id.slice(0, 6) };
         });
 
-        // Put me at top
         list.sort((a, b) => (a.uid === uid ? -1 : b.uid === uid ? 1 : 0));
         setRoommates(list);
       }
@@ -182,8 +180,6 @@ export default function DashboardPage() {
             ts?.toDate ? ts.toDate() : ts instanceof Date ? ts : null;
           if (!dt) continue;
 
-          // Since query is desc, once we’re older than start, we still need to continue
-          // because some docs might not be strictly ordered if missing createdAt, etc.
           if (dt < start || dt >= end) continue;
 
           const amt = Number(data?.amount);
@@ -199,9 +195,7 @@ export default function DashboardPage() {
             data?.createdBy ??
             null;
 
-          if (payer && String(payer) === uid) {
-            paid += amt;
-          }
+          if (payer && String(payer) === uid) paid += amt;
 
           owe += estimateOwedForUser(data, uid, amt);
         }
@@ -224,7 +218,7 @@ export default function DashboardPage() {
     return () => unsub();
   }, [groupId, uid, selectedMonth.year, selectedMonth.month]);
 
-  // Unread notifications count for bell badge
+  // Bell unread
   useEffect(() => {
     if (!groupId || !uid) return;
 
@@ -244,7 +238,7 @@ export default function DashboardPage() {
     return () => unsub();
   }, [groupId, uid]);
 
-  // Remove Member
+  // Remove member
   const removeMember = async (memberUid: string) => {
     if (!groupId || !uid) return;
     if (uid !== createdBy) return alert("Only admin can remove members.");
@@ -253,16 +247,11 @@ export default function DashboardPage() {
     if (!ok) return;
 
     await deleteDoc(doc(db, "groups", groupId, "members", memberUid));
-    await setDoc(
-      doc(db, "users", memberUid),
-      { groupId: null },
-      { merge: true }
-    );
-
+    await setDoc(doc(db, "users", memberUid), { groupId: null }, { merge: true });
     alert("Roommate removed ✅");
   };
 
-  // Transfer Admin
+  // Transfer admin
   const transferAdmin = async (newAdminUid: string) => {
     if (!groupId || !uid) return;
     if (uid !== createdBy) return alert("Only admin can transfer admin.");
@@ -272,16 +261,14 @@ export default function DashboardPage() {
 
     await updateDoc(doc(db, "groups", groupId), { createdBy: newAdminUid });
     setCreatedBy(newAdminUid);
-
     alert("Admin transferred ✅");
   };
 
-  // Leave Room
+  // Leave room
   const leaveRoom = async () => {
     if (!groupId || !uid) return;
 
     const others = roommates.filter((r) => r.uid !== uid);
-
     if (uid === createdBy && others.length > 0) {
       alert("Transfer admin before leaving.");
       return;
@@ -301,19 +288,13 @@ export default function DashboardPage() {
     router.push("/login");
   };
 
-  // Password reset that opens your app
   const changePassword = async () => {
-    if (!email) {
-      alert("No email found for this account.");
-      return;
-    }
-
+    if (!email) return alert("No email found for this account.");
     try {
       await sendPasswordResetEmail(auth, email, {
         url: "https://roommates-app.vercel.app/reset-password",
         handleCodeInApp: true,
       });
-
       alert("Password reset email sent ✅ (check spam too)");
     } catch (error: any) {
       alert("Error: " + (error?.message || "Failed to send reset email"));
@@ -323,121 +304,39 @@ export default function DashboardPage() {
   if (loading) return <div style={{ padding: 16 }}>Loading...</div>;
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        padding: 16,
-        background: "#0b0b0b",
-        color: "white",
-      }}
-    >
+    <div style={{ minHeight: "100vh", padding: 16, background: "#0b0b0b", color: "white" }}>
       <div style={{ display: "flex", gap: 16 }}>
         {/* Sidebar */}
-        <div
-          style={{
-            width: 260,
-            border: "1px solid #2b2b2b",
-            borderRadius: 14,
-            padding: 12,
-          }}
-        >
+        <div style={{ width: 260, border: "1px solid #2b2b2b", borderRadius: 14, padding: 12 }}>
           <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 12 }}>
             Dashboard
           </div>
 
-          <button
-            onClick={() => setTab("profile")}
-            style={{ marginBottom: 10, width: "100%" }}
-          >
+          <button onClick={() => setTab("profile")} style={{ marginBottom: 10, width: "100%" }}>
             Profile
           </button>
 
-          <button
-            onClick={() => setTab("expenses")}
-            style={{ marginBottom: 10, width: "100%" }}
-          >
+          <button onClick={() => setTab("thisMonth")} style={{ marginBottom: 10, width: "100%" }}>
+            This Month
+          </button>
+
+          <button onClick={() => setTab("expenses")} style={{ marginBottom: 10, width: "100%" }}>
             Expenses
           </button>
 
-          <button
-            onClick={() => setTab("groceries")}
-            style={{ marginBottom: 10, width: "100%" }}
-          >
+          <button onClick={() => setTab("groceries")} style={{ marginBottom: 10, width: "100%" }}>
             Grocery
           </button>
 
-          <button
-            onClick={() => setTab("roommates")}
-            style={{ marginBottom: 10, width: "100%" }}
-          >
+          <button onClick={() => setTab("roommates")} style={{ marginBottom: 10, width: "100%" }}>
             Roommates
           </button>
         </div>
 
         {/* Main */}
-        <div
-          style={{
-            flex: 1,
-            border: "1px solid #2b2b2b",
-            borderRadius: 14,
-            padding: 16,
-          }}
-        >
-          {/* Top bar with bell + month selector + stats */}
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-start",
-              gap: 12,
-              marginBottom: 14,
-              paddingBottom: 12,
-              borderBottom: "1px solid #2b2b2b",
-            }}
-          >
-            <div style={{ display: "grid", gap: 10 }}>
-              {/* Month selector */}
-              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                <div style={{ fontSize: 12, opacity: 0.75 }}>Month</div>
-                <select
-                  value={`${selectedMonth.year}-${selectedMonth.month}`}
-                  onChange={(e) => {
-                    const [y, m] = e.target.value.split("-").map(Number);
-                    setSelectedMonth({ year: y, month: m });
-                  }}
-                  style={{
-                    background: "#111",
-                    color: "white",
-                    border: "1px solid #2b2b2b",
-                    borderRadius: 10,
-                    padding: "8px 10px",
-                  }}
-                >
-                  {monthOptions.map((m) => (
-                    <option
-                      key={`${m.year}-${m.month}`}
-                      value={`${m.year}-${m.month}`}
-                    >
-                      {monthLabel(m.year, m.month)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Stats cards */}
-              <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-                <StatCard title="Total spent" value={`$${formatMoney(monthTotal)}`} />
-                <StatCard title="You paid" value={`$${formatMoney(youPaid)}`} />
-                <StatCard title="You owe" value={`$${formatMoney(youOwe)}`} />
-                <StatCard
-                  title="Net"
-                  value={`${net >= 0 ? "+" : "-"}$${formatMoney(Math.abs(net))}`}
-                />
-                <StatCard title="Expenses count" value={`${monthCount}`} />
-              </div>
-            </div>
-
-            {/* Bell */}
+        <div style={{ flex: 1, border: "1px solid #2b2b2b", borderRadius: 14, padding: 16 }}>
+          {/* Top-right bell only */}
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
             <button
               onClick={() => setTab("notifications")}
               style={{
@@ -449,7 +348,6 @@ export default function DashboardPage() {
                 color: "white",
                 cursor: "pointer",
                 fontWeight: 800,
-                height: 44,
               }}
               title="Notifications"
             >
@@ -476,15 +374,8 @@ export default function DashboardPage() {
           </div>
 
           {tab === "profile" && (
-            <div style={{ display: "grid", gap: 20 }}>
-              <div
-                style={{
-                  border: "1px solid #333",
-                  borderRadius: 12,
-                  padding: 16,
-                  background: "#111",
-                }}
-              >
+            <div style={{ display: "grid", gap: 14 }}>
+              <div style={{ border: "1px solid #333", borderRadius: 12, padding: 16, background: "#111" }}>
                 <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
                   <div
                     style={{
@@ -498,51 +389,71 @@ export default function DashboardPage() {
                       fontWeight: 900,
                       fontSize: 18,
                     }}
-                    title={myName || email || "User"}
                   >
                     {initials}
                   </div>
 
                   <div style={{ display: "grid", gap: 2 }}>
                     <h2 style={{ margin: 0 }}>Profile</h2>
-                    <div style={{ fontSize: 13, opacity: 0.8 }}>
-                      Account + room info
-                    </div>
+                    <div style={{ fontSize: 13, opacity: 0.8 }}>Account</div>
                   </div>
                 </div>
 
                 <div style={{ marginTop: 12 }}>
-                  <p>
-                    <strong>Name:</strong> {myName || "Not set"}
-                  </p>
-                  <p>
-                    <strong>Email:</strong> {email}
-                  </p>
+                  <p><strong>Name:</strong> {myName || "Not set"}</p>
+                  <p><strong>Email:</strong> {email}</p>
                 </div>
 
-                <div
-                  style={{
-                    marginTop: 12,
-                    display: "flex",
-                    gap: 10,
-                    flexWrap: "wrap",
-                  }}
-                >
+                <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
                   <button onClick={changePassword}>Change Password</button>
                   <button onClick={logout}>Logout</button>
                 </div>
               </div>
 
-              <RoommatesPanel
-                groupId={groupId ?? ""}
-                roommates={roommates}
-                myUid={uid ?? ""}
-                isCreator={uid === createdBy}
-                createdByUid={createdBy}
-                onRemove={removeMember}
-                onTransferAdmin={transferAdmin}
-                onLeave={leaveRoom}
-              />
+              <div style={{ border: "1px solid #333", borderRadius: 12, padding: 16, background: "#111" }}>
+                <h3 style={{ marginTop: 0 }}>Room</h3>
+                <p><strong>Role:</strong> {uid === createdBy ? "Admin" : "Member"}</p>
+                <p><strong>Room ID:</strong> {groupId}</p>
+                <button onClick={leaveRoom} style={{ marginTop: 8 }}>Leave Room</button>
+              </div>
+            </div>
+          )}
+
+          {tab === "thisMonth" && (
+            <div style={{ display: "grid", gap: 12 }}>
+              <h2 style={{ margin: 0 }}>This Month</h2>
+
+              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                <div style={{ fontSize: 12, opacity: 0.75 }}>Month</div>
+                <select
+                  value={`${selectedMonth.year}-${selectedMonth.month}`}
+                  onChange={(e) => {
+                    const [y, m] = e.target.value.split("-").map(Number);
+                    setSelectedMonth({ year: y, month: m });
+                  }}
+                  style={{
+                    background: "#111",
+                    color: "white",
+                    border: "1px solid #2b2b2b",
+                    borderRadius: 10,
+                    padding: "8px 10px",
+                  }}
+                >
+                  {monthOptions.map((m) => (
+                    <option key={`${m.year}-${m.month}`} value={`${m.year}-${m.month}`}>
+                      {monthLabel(m.year, m.month)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+                <StatCard title="Total spent" value={`$${formatMoney(monthTotal)}`} />
+                <StatCard title="You paid" value={`$${formatMoney(youPaid)}`} />
+                <StatCard title="You owe" value={`$${formatMoney(youOwe)}`} />
+                <StatCard title="Net" value={`${net >= 0 ? "+" : "-"}$${formatMoney(Math.abs(net))}`} />
+                <StatCard title="Expenses count" value={`${monthCount}`} />
+              </div>
             </div>
           )}
 
@@ -569,15 +480,7 @@ export default function DashboardPage() {
 
 function StatCard({ title, value }: { title: string; value: string }) {
   return (
-    <div
-      style={{
-        border: "1px solid #2b2b2b",
-        borderRadius: 12,
-        padding: "10px 12px",
-        background: "#111",
-        minWidth: 160,
-      }}
-    >
+    <div style={{ border: "1px solid #2b2b2b", borderRadius: 12, padding: "10px 12px", background: "#111", minWidth: 160 }}>
       <div style={{ fontSize: 12, opacity: 0.75 }}>{title}</div>
       <div style={{ fontSize: 18, fontWeight: 900 }}>{value}</div>
     </div>
@@ -607,38 +510,15 @@ function formatMoney(n: number) {
   return v.toFixed(2);
 }
 
-/**
- * Tries multiple common schemas to compute what the current user owes for an expense.
- * Priority:
- * 1) per-user map fields: splits/shares/owedBy[uid]
- * 2) participants array: amount / participants.length if uid included
- * Otherwise: 0
- */
 function estimateOwedForUser(data: any, uid: string, amount: number): number {
-  if (!uid) return 0;
-
-  // 1) Per-user map
-  const map =
-    data?.splits ??
-    data?.shares ??
-    data?.owedBy ??
-    data?.splitMap ??
-    null;
-
+  const map = data?.splits ?? data?.shares ?? data?.owedBy ?? data?.splitMap ?? null;
   if (map && typeof map === "object") {
     const v = map[uid];
     const num = Number(v);
     if (Number.isFinite(num)) return num;
   }
 
-  // 2) Participants list
-  const arr =
-    data?.participants ??
-    data?.participantUids ??
-    data?.splitBetween ??
-    data?.sharedWith ??
-    null;
-
+  const arr = data?.participants ?? data?.participantUids ?? data?.splitBetween ?? data?.sharedWith ?? null;
   if (Array.isArray(arr) && arr.length > 0) {
     const hasMe = arr.map(String).includes(String(uid));
     if (!hasMe) return 0;
