@@ -36,7 +36,6 @@ export default function NotificationsPanel() {
   const [rows, setRows] = useState<Notif[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // ✅ selection state
   const [selected, setSelected] = useState<Record<string, boolean>>({});
 
   const notifsCol = useMemo(() => {
@@ -87,7 +86,7 @@ export default function NotificationsPanel() {
 
       setRows(items);
 
-      // ✅ Clean up selected map (remove ids that no longer exist)
+      // Clean selected state
       setSelected((prev) => {
         const next: Record<string, boolean> = {};
         const ids = new Set(items.map((x) => x.id));
@@ -110,24 +109,8 @@ export default function NotificationsPanel() {
     return Object.keys(selected).filter((id) => selected[id]);
   }, [selected]);
 
-  const allSelected = useMemo(() => {
-    if (rows.length === 0) return false;
-    return rows.every((n) => selected[n.id]);
-  }, [rows, selected]);
-
   function toggleOne(id: string) {
     setSelected((prev) => ({ ...prev, [id]: !prev[id] }));
-  }
-
-  function toggleSelectAll() {
-    if (rows.length === 0) return;
-    if (allSelected) {
-      setSelected({});
-      return;
-    }
-    const map: Record<string, boolean> = {};
-    for (const n of rows) map[n.id] = true;
-    setSelected(map);
   }
 
   async function markAllRead() {
@@ -198,11 +181,6 @@ export default function NotificationsPanel() {
         <div>
           <h2 className="text-lg font-semibold">Notifications</h2>
           <p className="text-sm text-gray-400">Unread: {unreadCount}</p>
-          {rows.length > 0 ? (
-            <p className="text-xs text-gray-500 mt-1">
-              Tip: use checkboxes to delete selected.
-            </p>
-          ) : null}
         </div>
 
         <div className="flex flex-wrap gap-2 justify-end">
@@ -211,15 +189,6 @@ export default function NotificationsPanel() {
             className="text-sm border px-3 py-2 rounded bg-white text-black"
           >
             Mark all read
-          </button>
-
-          <button
-            onClick={toggleSelectAll}
-            disabled={rows.length === 0}
-            className="text-sm border px-3 py-2 rounded"
-            style={{ opacity: rows.length === 0 ? 0.5 : 1 }}
-          >
-            {allSelected ? "Clear selection" : "Select all"}
           </button>
 
           <button
@@ -287,7 +256,6 @@ export default function NotificationsPanel() {
                   <button
                     onClick={() => deleteOne(n.id)}
                     className="text-xs border px-2 py-1 rounded"
-                    title="Delete"
                   >
                     Delete
                   </button>
