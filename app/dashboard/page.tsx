@@ -31,6 +31,8 @@ import NotificationsPanel from "../../components/NotificationsPanel";
 type Tab = "profile" | "expenses" | "groceries" | "roommates" | "notifications";
 type Roommate = { uid: string; name: string };
 
+type MonthKey = { year: number; month: number }; // month: 0-11
+
 export default function DashboardPage() {
   const router = useRouter();
 
@@ -46,16 +48,26 @@ export default function DashboardPage() {
 
   const [roommates, setRoommates] = useState<Roommate[]>([]);
 
-  // (2) Monthly stats
+  // Month selector
+  const now = useMemo(() => new Date(), []);
+  const [selectedMonth, setSelectedMonth] = useState<MonthKey>({
+    year: now.getFullYear(),
+    month: now.getMonth(),
+  });
+
+  // Monthly stats (for selected month)
   const [monthTotal, setMonthTotal] = useState<number>(0);
   const [monthCount, setMonthCount] = useState<number>(0);
+  const [youPaid, setYouPaid] = useState<number>(0);
+  const [youOwe, setYouOwe] = useState<number>(0);
+  const [net, setNet] = useState<number>(0);
 
-  // (3) Unread notifications count for bell badge
+  // Unread notifications count for bell badge
   const [unreadNotifs, setUnreadNotifs] = useState<number>(0);
 
   const loading = useMemo(() => !authChecked, [authChecked]);
 
-  // ✅ Use your Firestore name (from roommates list) if possible
+  // Use Firestore name (from roommates list) if possible
   const myName = useMemo(() => {
     const fromRoommates =
       uid ? roommates.find((r) => r.uid === uid)?.name : undefined;
@@ -67,7 +79,18 @@ export default function DashboardPage() {
     return getInitials(base);
   }, [myName, email]);
 
-  // 🔐 Auth
+  // Month options (current + previous 11)
+  const monthOptions = useMemo(() => {
+    const out: MonthKey[] = [];
+    const base = new Date();
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(base.getFullYear(), base.getMonth() - i, 1);
+      out.push({ year: d.getFullYear(), month: d.getMonth() });
+    }
+    return out;
+  }, []);
+
+  // Auth
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (!u) {
@@ -102,7 +125,7 @@ export default function DashboardPage() {
     return () => unsub();
   }, [router]);
 
-  // 👥 Load roommates
+  // Load roommates
   useEffect(() => {
     if (!groupId) return;
 
@@ -126,7 +149,6 @@ export default function DashboardPage() {
 
         // Put me at top
         list.sort((a, b) => (a.uid === uid ? -1 : b.uid === uid ? 1 : 0));
-
         setRoommates(list);
       }
     );
@@ -134,55 +156,75 @@ export default function DashboardPage() {
     return () => unsub();
   }, [groupId, uid]);
 
-  // (2) Monthly total spent + count (safe even if expenses collection is empty)
+  // Monthly stats for selected month
   useEffect(() => {
-    if (!groupId) return;
+    if (!groupId || !uid) return;
 
     const expensesCol = collection(db, "groups", groupId, "expenses");
-    const q = query(expensesCol, orderBy("createdAt", "desc"), limit(200));
+    const q = query(expensesCol, orderBy("createdAt", "desc"), limit(500));
+
+    const start = new Date(selectedMonth.year, selectedMonth.month, 1);
+    const end = new Date(selectedMonth.year, selectedMonth.month + 1, 1);
 
     const unsub = onSnapshot(
       q,
       (snap) => {
-        const now = new Date();
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
         let total = 0;
         let count = 0;
+        let paid = 0;
+        let owe = 0;
 
         for (const d of snap.docs) {
           const data = d.data() as any;
-          const amt = Number(data?.amount);
 
-          // createdAt can be Firestore Timestamp
           const ts = data?.createdAt;
           const dt: Date | null =
             ts?.toDate ? ts.toDate() : ts instanceof Date ? ts : null;
-
           if (!dt) continue;
-          if (dt >= startOfMonth) {
-            if (Number.isFinite(amt)) total += amt;
-            count += 1;
-          } else {
-            // because ordered desc, once older than month we can break
-            break;
+
+          // Since query is desc, once we’re older than start, we still need to continue
+          // because some docs might not be strictly ordered if missing createdAt, etc.
+          if (dt < start || dt >= end) continue;
+
+          const amt = Number(data?.amount);
+          if (!Number.isFinite(amt)) continue;
+
+          total += amt;
+          count += 1;
+
+          const payer =
+            data?.paidByUid ??
+            data?.paidBy ??
+            data?.createdByUid ??
+            data?.createdBy ??
+            null;
+
+          if (payer && String(payer) === uid) {
+            paid += amt;
           }
+
+          owe += estimateOwedForUser(data, uid, amt);
         }
 
         setMonthTotal(total);
         setMonthCount(count);
+        setYouPaid(paid);
+        setYouOwe(owe);
+        setNet(paid - owe);
       },
       () => {
-        // If collection doesn't exist or permission, just show 0
         setMonthTotal(0);
         setMonthCount(0);
+        setYouPaid(0);
+        setYouOwe(0);
+        setNet(0);
       }
     );
 
     return () => unsub();
-  }, [groupId]);
+  }, [groupId, uid, selectedMonth.year, selectedMonth.month]);
 
-  // (3) Unread notifications count for bell badge
+  // Unread notifications count for bell badge
   useEffect(() => {
     if (!groupId || !uid) return;
 
@@ -202,7 +244,7 @@ export default function DashboardPage() {
     return () => unsub();
   }, [groupId, uid]);
 
-  // 🧹 Remove Member
+  // Remove Member
   const removeMember = async (memberUid: string) => {
     if (!groupId || !uid) return;
     if (uid !== createdBy) return alert("Only admin can remove members.");
@@ -211,12 +253,16 @@ export default function DashboardPage() {
     if (!ok) return;
 
     await deleteDoc(doc(db, "groups", groupId, "members", memberUid));
-    await setDoc(doc(db, "users", memberUid), { groupId: null }, { merge: true });
+    await setDoc(
+      doc(db, "users", memberUid),
+      { groupId: null },
+      { merge: true }
+    );
 
     alert("Roommate removed ✅");
   };
 
-  // 🔁 Transfer Admin
+  // Transfer Admin
   const transferAdmin = async (newAdminUid: string) => {
     if (!groupId || !uid) return;
     if (uid !== createdBy) return alert("Only admin can transfer admin.");
@@ -230,7 +276,7 @@ export default function DashboardPage() {
     alert("Admin transferred ✅");
   };
 
-  // 🚪 Leave Room
+  // Leave Room
   const leaveRoom = async () => {
     if (!groupId || !uid) return;
 
@@ -255,7 +301,7 @@ export default function DashboardPage() {
     router.push("/login");
   };
 
-  // ✅ Password reset that opens YOUR APP link
+  // Password reset that opens your app
   const changePassword = async () => {
     if (!email) {
       alert("No email found for this account.");
@@ -326,8 +372,6 @@ export default function DashboardPage() {
           >
             Roommates
           </button>
-
-          {/* ✅ Notifications removed from sidebar (bell opens it) */}
         </div>
 
         {/* Main */}
@@ -339,53 +383,61 @@ export default function DashboardPage() {
             padding: 16,
           }}
         >
-          {/* ✅ Top bar with bell + monthly stats */}
+          {/* Top bar with bell + month selector + stats */}
           <div
             style={{
               display: "flex",
               justifyContent: "space-between",
-              alignItems: "center",
+              alignItems: "flex-start",
               gap: 12,
               marginBottom: 14,
               paddingBottom: 12,
               borderBottom: "1px solid #2b2b2b",
             }}
           >
-            <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-              <div
-                style={{
-                  border: "1px solid #2b2b2b",
-                  borderRadius: 12,
-                  padding: "10px 12px",
-                  background: "#111",
-                }}
-              >
-                <div style={{ fontSize: 12, opacity: 0.75 }}>
-                  Total spent this month
-                </div>
-                <div style={{ fontSize: 18, fontWeight: 900 }}>
-                  ${formatMoney(monthTotal)}
-                </div>
+            <div style={{ display: "grid", gap: 10 }}>
+              {/* Month selector */}
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <div style={{ fontSize: 12, opacity: 0.75 }}>Month</div>
+                <select
+                  value={`${selectedMonth.year}-${selectedMonth.month}`}
+                  onChange={(e) => {
+                    const [y, m] = e.target.value.split("-").map(Number);
+                    setSelectedMonth({ year: y, month: m });
+                  }}
+                  style={{
+                    background: "#111",
+                    color: "white",
+                    border: "1px solid #2b2b2b",
+                    borderRadius: 10,
+                    padding: "8px 10px",
+                  }}
+                >
+                  {monthOptions.map((m) => (
+                    <option
+                      key={`${m.year}-${m.month}`}
+                      value={`${m.year}-${m.month}`}
+                    >
+                      {monthLabel(m.year, m.month)}
+                    </option>
+                  ))}
+                </select>
               </div>
 
-              <div
-                style={{
-                  border: "1px solid #2b2b2b",
-                  borderRadius: 12,
-                  padding: "10px 12px",
-                  background: "#111",
-                }}
-              >
-                <div style={{ fontSize: 12, opacity: 0.75 }}>
-                  Expenses this month
-                </div>
-                <div style={{ fontSize: 18, fontWeight: 900 }}>
-                  {monthCount}
-                </div>
+              {/* Stats cards */}
+              <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+                <StatCard title="Total spent" value={`$${formatMoney(monthTotal)}`} />
+                <StatCard title="You paid" value={`$${formatMoney(youPaid)}`} />
+                <StatCard title="You owe" value={`$${formatMoney(youOwe)}`} />
+                <StatCard
+                  title="Net"
+                  value={`${net >= 0 ? "+" : "-"}$${formatMoney(Math.abs(net))}`}
+                />
+                <StatCard title="Expenses count" value={`${monthCount}`} />
               </div>
             </div>
 
-            {/* 🔔 Bell */}
+            {/* Bell */}
             <button
               onClick={() => setTab("notifications")}
               style={{
@@ -397,6 +449,7 @@ export default function DashboardPage() {
                 color: "white",
                 cursor: "pointer",
                 fontWeight: 800,
+                height: 44,
               }}
               title="Notifications"
             >
@@ -424,7 +477,6 @@ export default function DashboardPage() {
 
           {tab === "profile" && (
             <div style={{ display: "grid", gap: 20 }}>
-              {/* Profile Info */}
               <div
                 style={{
                   border: "1px solid #333",
@@ -434,7 +486,6 @@ export default function DashboardPage() {
                 }}
               >
                 <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-                  {/* ✅ Avatar */}
                   <div
                     style={{
                       width: 54,
@@ -469,13 +520,19 @@ export default function DashboardPage() {
                   </p>
                 </div>
 
-                <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <div
+                  style={{
+                    marginTop: 12,
+                    display: "flex",
+                    gap: 10,
+                    flexWrap: "wrap",
+                  }}
+                >
                   <button onClick={changePassword}>Change Password</button>
                   <button onClick={logout}>Logout</button>
                 </div>
               </div>
 
-              {/* Roommates + Room Info */}
               <RoommatesPanel
                 groupId={groupId ?? ""}
                 roommates={roommates}
@@ -510,11 +567,31 @@ export default function DashboardPage() {
   );
 }
 
+function StatCard({ title, value }: { title: string; value: string }) {
+  return (
+    <div
+      style={{
+        border: "1px solid #2b2b2b",
+        borderRadius: 12,
+        padding: "10px 12px",
+        background: "#111",
+        minWidth: 160,
+      }}
+    >
+      <div style={{ fontSize: 12, opacity: 0.75 }}>{title}</div>
+      <div style={{ fontSize: 18, fontWeight: 900 }}>{value}</div>
+    </div>
+  );
+}
+
+function monthLabel(year: number, month: number) {
+  const d = new Date(year, month, 1);
+  return d.toLocaleString(undefined, { month: "long", year: "numeric" });
+}
+
 function getInitials(input: string) {
   const s = (input || "").trim();
   if (!s) return "U";
-
-  // If input is an email, use first letter
   if (s.includes("@")) return s[0]?.toUpperCase() || "U";
 
   const parts = s.split(/\s+/).filter(Boolean);
@@ -526,7 +603,47 @@ function getInitials(input: string) {
 }
 
 function formatMoney(n: number) {
-  // avoid weird floats
   const v = Math.round((Number(n) || 0) * 100) / 100;
   return v.toFixed(2);
+}
+
+/**
+ * Tries multiple common schemas to compute what the current user owes for an expense.
+ * Priority:
+ * 1) per-user map fields: splits/shares/owedBy[uid]
+ * 2) participants array: amount / participants.length if uid included
+ * Otherwise: 0
+ */
+function estimateOwedForUser(data: any, uid: string, amount: number): number {
+  if (!uid) return 0;
+
+  // 1) Per-user map
+  const map =
+    data?.splits ??
+    data?.shares ??
+    data?.owedBy ??
+    data?.splitMap ??
+    null;
+
+  if (map && typeof map === "object") {
+    const v = map[uid];
+    const num = Number(v);
+    if (Number.isFinite(num)) return num;
+  }
+
+  // 2) Participants list
+  const arr =
+    data?.participants ??
+    data?.participantUids ??
+    data?.splitBetween ??
+    data?.sharedWith ??
+    null;
+
+  if (Array.isArray(arr) && arr.length > 0) {
+    const hasMe = arr.map(String).includes(String(uid));
+    if (!hasMe) return 0;
+    return amount / arr.length;
+  }
+
+  return 0;
 }
