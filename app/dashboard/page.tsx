@@ -8,13 +8,18 @@ import {
   sendPasswordResetEmail,
 } from "firebase/auth";
 import {
+  arrayUnion,
   collection,
   deleteDoc,
   doc,
   getDoc,
+  limit,
   onSnapshot,
+  orderBy,
+  query,
   setDoc,
   updateDoc,
+  writeBatch,
 } from "firebase/firestore";
 import { auth, db } from "@/app/lib/firebase";
 
@@ -23,13 +28,7 @@ import GroceryPanel from "../../components/GroceryPanel";
 import RoommatesPanel from "../../components/RoommatesPanel";
 import NotificationsPanel from "../../components/NotificationsPanel";
 
-type Tab =
-  | "profile"
-  | "expenses"
-  | "groceries"
-  | "roommates"
-  | "notifications";
-
+type Tab = "profile" | "expenses" | "groceries" | "roommates" | "notifications";
 type Roommate = { uid: string; name: string };
 
 export default function DashboardPage() {
@@ -40,14 +39,33 @@ export default function DashboardPage() {
 
   const [uid, setUid] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
-  const [displayName, setDisplayName] = useState<string>("");
+  const [authDisplayName, setAuthDisplayName] = useState<string>("");
 
   const [groupId, setGroupId] = useState<string | null>(null);
   const [createdBy, setCreatedBy] = useState<string | null>(null);
 
   const [roommates, setRoommates] = useState<Roommate[]>([]);
 
+  // (2) Monthly stats
+  const [monthTotal, setMonthTotal] = useState<number>(0);
+  const [monthCount, setMonthCount] = useState<number>(0);
+
+  // (3) Unread notifications count for bell badge
+  const [unreadNotifs, setUnreadNotifs] = useState<number>(0);
+
   const loading = useMemo(() => !authChecked, [authChecked]);
+
+  // ✅ Use your Firestore name (from roommates list) if possible
+  const myName = useMemo(() => {
+    const fromRoommates =
+      uid ? roommates.find((r) => r.uid === uid)?.name : undefined;
+    return (fromRoommates || authDisplayName || "").trim();
+  }, [uid, roommates, authDisplayName]);
+
+  const initials = useMemo(() => {
+    const base = myName || email || "U";
+    return getInitials(base);
+  }, [myName, email]);
 
   // 🔐 Auth
   useEffect(() => {
@@ -60,7 +78,7 @@ export default function DashboardPage() {
 
       setUid(u.uid);
       setEmail(u.email || null);
-      setDisplayName(u.displayName || "");
+      setAuthDisplayName(u.displayName || "");
 
       const userSnap = await getDoc(doc(db, "users", u.uid));
       const userData = userSnap.exists() ? (userSnap.data() as any) : {};
@@ -106,10 +124,80 @@ export default function DashboardPage() {
           };
         });
 
+        // Put me at top
         list.sort((a, b) => (a.uid === uid ? -1 : b.uid === uid ? 1 : 0));
+
         setRoommates(list);
       }
     );
+
+    return () => unsub();
+  }, [groupId, uid]);
+
+  // (2) Monthly total spent + count (safe even if expenses collection is empty)
+  useEffect(() => {
+    if (!groupId) return;
+
+    const expensesCol = collection(db, "groups", groupId, "expenses");
+    const q = query(expensesCol, orderBy("createdAt", "desc"), limit(200));
+
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+        let total = 0;
+        let count = 0;
+
+        for (const d of snap.docs) {
+          const data = d.data() as any;
+          const amt = Number(data?.amount);
+
+          // createdAt can be Firestore Timestamp
+          const ts = data?.createdAt;
+          const dt: Date | null =
+            ts?.toDate ? ts.toDate() : ts instanceof Date ? ts : null;
+
+          if (!dt) continue;
+          if (dt >= startOfMonth) {
+            if (Number.isFinite(amt)) total += amt;
+            count += 1;
+          } else {
+            // because ordered desc, once older than month we can break
+            break;
+          }
+        }
+
+        setMonthTotal(total);
+        setMonthCount(count);
+      },
+      () => {
+        // If collection doesn't exist or permission, just show 0
+        setMonthTotal(0);
+        setMonthCount(0);
+      }
+    );
+
+    return () => unsub();
+  }, [groupId]);
+
+  // (3) Unread notifications count for bell badge
+  useEffect(() => {
+    if (!groupId || !uid) return;
+
+    const notifsCol = collection(db, "groups", groupId, "notifications");
+    const q = query(notifsCol, orderBy("createdAt", "desc"), limit(50));
+
+    const unsub = onSnapshot(q, (snap) => {
+      let unread = 0;
+      for (const d of snap.docs) {
+        const data = d.data() as any;
+        const readBy = Array.isArray(data?.readBy) ? data.readBy : [];
+        if (!readBy.includes(uid)) unread += 1;
+      }
+      setUnreadNotifs(unread);
+    });
 
     return () => unsub();
   }, [groupId, uid]);
@@ -167,24 +255,24 @@ export default function DashboardPage() {
     router.push("/login");
   };
 
-  // ✅ Password reset that opens YOUR APP link (clickable)
+  // ✅ Password reset that opens YOUR APP link
   const changePassword = async () => {
-  if (!email) {
-    alert("No email found for this account.");
-    return;
-  }
+    if (!email) {
+      alert("No email found for this account.");
+      return;
+    }
 
-  try {
-    await sendPasswordResetEmail(auth, email, {
-      url: "https://roommates-app.vercel.app/reset-password",
-      handleCodeInApp: true,
-    });
+    try {
+      await sendPasswordResetEmail(auth, email, {
+        url: "https://roommates-app.vercel.app/reset-password",
+        handleCodeInApp: true,
+      });
 
-    alert("Password reset email sent ✅ (check spam too)");
-  } catch (error: any) {
-    alert("Error: " + (error?.message || "Failed to send reset email"));
-  }
-};
+      alert("Password reset email sent ✅ (check spam too)");
+    } catch (error: any) {
+      alert("Error: " + (error?.message || "Failed to send reset email"));
+    }
+  };
 
   if (loading) return <div style={{ padding: 16 }}>Loading...</div>;
 
@@ -239,12 +327,7 @@ export default function DashboardPage() {
             Roommates
           </button>
 
-          <button
-            onClick={() => setTab("notifications")}
-            style={{ marginBottom: 10, width: "100%" }}
-          >
-            Notifications
-          </button>
+          {/* ✅ Notifications removed from sidebar (bell opens it) */}
         </div>
 
         {/* Main */}
@@ -256,6 +339,89 @@ export default function DashboardPage() {
             padding: 16,
           }}
         >
+          {/* ✅ Top bar with bell + monthly stats */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 12,
+              marginBottom: 14,
+              paddingBottom: 12,
+              borderBottom: "1px solid #2b2b2b",
+            }}
+          >
+            <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+              <div
+                style={{
+                  border: "1px solid #2b2b2b",
+                  borderRadius: 12,
+                  padding: "10px 12px",
+                  background: "#111",
+                }}
+              >
+                <div style={{ fontSize: 12, opacity: 0.75 }}>
+                  Total spent this month
+                </div>
+                <div style={{ fontSize: 18, fontWeight: 900 }}>
+                  ${formatMoney(monthTotal)}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  border: "1px solid #2b2b2b",
+                  borderRadius: 12,
+                  padding: "10px 12px",
+                  background: "#111",
+                }}
+              >
+                <div style={{ fontSize: 12, opacity: 0.75 }}>
+                  Expenses this month
+                </div>
+                <div style={{ fontSize: 18, fontWeight: 900 }}>
+                  {monthCount}
+                </div>
+              </div>
+            </div>
+
+            {/* 🔔 Bell */}
+            <button
+              onClick={() => setTab("notifications")}
+              style={{
+                position: "relative",
+                border: "1px solid #2b2b2b",
+                borderRadius: 12,
+                padding: "10px 12px",
+                background: "#111",
+                color: "white",
+                cursor: "pointer",
+                fontWeight: 800,
+              }}
+              title="Notifications"
+            >
+              🔔
+              {unreadNotifs > 0 ? (
+                <span
+                  style={{
+                    position: "absolute",
+                    top: -6,
+                    right: -6,
+                    background: "red",
+                    color: "white",
+                    borderRadius: 999,
+                    padding: "2px 7px",
+                    fontSize: 12,
+                    fontWeight: 900,
+                    border: "2px solid #0b0b0b",
+                  }}
+                >
+                  {unreadNotifs > 99 ? "99+" : unreadNotifs}
+                </span>
+              ) : null}
+            </button>
+          </div>
+
           {tab === "profile" && (
             <div style={{ display: "grid", gap: 20 }}>
               {/* Profile Info */}
@@ -267,15 +433,43 @@ export default function DashboardPage() {
                   background: "#111",
                 }}
               >
-                <h2 style={{ marginBottom: 10 }}>Profile</h2>
-                <p>
-                  <strong>Name:</strong> {displayName || "Not set"}
-                </p>
-                <p>
-                  <strong>Email:</strong> {email}
-                </p>
+                <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+                  {/* ✅ Avatar */}
+                  <div
+                    style={{
+                      width: 54,
+                      height: 54,
+                      borderRadius: 999,
+                      border: "1px solid #2b2b2b",
+                      background: "#0b0b0b",
+                      display: "grid",
+                      placeItems: "center",
+                      fontWeight: 900,
+                      fontSize: 18,
+                    }}
+                    title={myName || email || "User"}
+                  >
+                    {initials}
+                  </div>
 
-                <div style={{ marginTop: 12, display: "flex", gap: 10 }}>
+                  <div style={{ display: "grid", gap: 2 }}>
+                    <h2 style={{ margin: 0 }}>Profile</h2>
+                    <div style={{ fontSize: 13, opacity: 0.8 }}>
+                      Account + room info
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: 12 }}>
+                  <p>
+                    <strong>Name:</strong> {myName || "Not set"}
+                  </p>
+                  <p>
+                    <strong>Email:</strong> {email}
+                  </p>
+                </div>
+
+                <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
                   <button onClick={changePassword}>Change Password</button>
                   <button onClick={logout}>Logout</button>
                 </div>
@@ -314,4 +508,25 @@ export default function DashboardPage() {
       </div>
     </div>
   );
+}
+
+function getInitials(input: string) {
+  const s = (input || "").trim();
+  if (!s) return "U";
+
+  // If input is an email, use first letter
+  if (s.includes("@")) return s[0]?.toUpperCase() || "U";
+
+  const parts = s.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) return parts[0][0]?.toUpperCase() || "U";
+
+  const a = parts[0][0] || "";
+  const b = parts[parts.length - 1][0] || "";
+  return (a + b).toUpperCase() || "U";
+}
+
+function formatMoney(n: number) {
+  // avoid weird floats
+  const v = Math.round((Number(n) || 0) * 100) / 100;
+  return v.toFixed(2);
 }
