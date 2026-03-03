@@ -2,7 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { onAuthStateChanged, signOut } from "firebase/auth";
+import {
+  onAuthStateChanged,
+  signOut,
+  sendPasswordResetEmail,
+} from "firebase/auth";
 import {
   collection,
   deleteDoc,
@@ -19,16 +23,25 @@ import GroceryPanel from "../../components/GroceryPanel";
 import RoommatesPanel from "../../components/RoommatesPanel";
 import NotificationsPanel from "../../components/NotificationsPanel";
 
-type Tab = "expenses" | "groceries" | "roommates" | "notifications";
+type Tab =
+  | "profile"
+  | "expenses"
+  | "groceries"
+  | "roommates"
+  | "notifications";
+
 type Roommate = { uid: string; name: string };
 
 export default function DashboardPage() {
   const router = useRouter();
 
-  const [tab, setTab] = useState<Tab>("expenses");
+  const [tab, setTab] = useState<Tab>("profile");
   const [authChecked, setAuthChecked] = useState(false);
 
   const [uid, setUid] = useState<string | null>(null);
+  const [email, setEmail] = useState<string | null>(null);
+  const [displayName, setDisplayName] = useState<string>("");
+
   const [groupId, setGroupId] = useState<string | null>(null);
   const [createdBy, setCreatedBy] = useState<string | null>(null);
 
@@ -46,6 +59,8 @@ export default function DashboardPage() {
       }
 
       setUid(u.uid);
+      setEmail(u.email || null);
+      setDisplayName(u.displayName || "");
 
       const userSnap = await getDoc(doc(db, "users", u.uid));
       const userData = userSnap.exists() ? (userSnap.data() as any) : {};
@@ -59,7 +74,6 @@ export default function DashboardPage() {
         return;
       }
 
-      // Load group admin
       const groupSnap = await getDoc(doc(db, "groups", gid));
       const groupData = groupSnap.exists() ? (groupSnap.data() as any) : {};
       setCreatedBy(groupData?.createdBy || null);
@@ -92,7 +106,6 @@ export default function DashboardPage() {
           };
         });
 
-        // Put me at top if possible
         list.sort((a, b) =>
           a.uid === uid ? -1 : b.uid === uid ? 1 : 0
         );
@@ -127,10 +140,12 @@ export default function DashboardPage() {
     if (!groupId || !uid) return;
     if (uid !== createdBy) return alert("Only admin can transfer admin.");
 
-    const ok = confirm("Transfer admin to this roommate?");
+    const ok = confirm("Transfer admin?");
     if (!ok) return;
 
-    await updateDoc(doc(db, "groups", groupId), { createdBy: newAdminUid });
+    await updateDoc(doc(db, "groups", groupId), {
+      createdBy: newAdminUid,
+    });
     setCreatedBy(newAdminUid);
 
     alert("Admin transferred ✅");
@@ -161,6 +176,12 @@ export default function DashboardPage() {
     router.push("/login");
   };
 
+  const changePassword = async () => {
+    if (!email) return;
+    await sendPasswordResetEmail(auth, email);
+    alert("Password reset email sent ✅");
+  };
+
   if (loading) return <div style={{ padding: 16 }}>Loading...</div>;
 
   return (
@@ -186,6 +207,10 @@ export default function DashboardPage() {
             Dashboard
           </div>
 
+          <button onClick={() => setTab("profile")} style={{ marginBottom: 10, width: "100%" }}>
+            Profile
+          </button>
+
           <button onClick={() => setTab("expenses")} style={{ marginBottom: 10, width: "100%" }}>
             Expenses
           </button>
@@ -201,10 +226,6 @@ export default function DashboardPage() {
           <button onClick={() => setTab("notifications")} style={{ marginBottom: 10, width: "100%" }}>
             Notifications
           </button>
-
-          <button onClick={logout} style={{ marginTop: 12, width: "100%" }}>
-            Logout
-          </button>
         </div>
 
         {/* Main */}
@@ -216,11 +237,50 @@ export default function DashboardPage() {
             padding: 16,
           }}
         >
+          {tab === "profile" && (
+            <div style={{ display: "grid", gap: 20 }}>
+              {/* Profile Info */}
+              <div
+                style={{
+                  border: "1px solid #333",
+                  borderRadius: 12,
+                  padding: 16,
+                  background: "#111",
+                }}
+              >
+                <h2 style={{ marginBottom: 10 }}>Profile</h2>
+                <p><strong>Name:</strong> {displayName || "Not set"}</p>
+                <p><strong>Email:</strong> {email}</p>
+
+                <div style={{ marginTop: 12, display: "flex", gap: 10 }}>
+                  <button onClick={changePassword}>
+                    Change Password
+                  </button>
+                  <button onClick={logout}>
+                    Logout
+                  </button>
+                </div>
+              </div>
+
+              {/* Roommates + Room Info */}
+              <RoommatesPanel
+                groupId={groupId ?? ""}
+                roommates={roommates}
+                myUid={uid ?? ""}
+                isCreator={uid === createdBy}
+                createdByUid={createdBy}
+                onRemove={removeMember}
+                onTransferAdmin={transferAdmin}
+                onLeave={leaveRoom}
+              />
+            </div>
+          )}
+
           {tab === "expenses" && <ExpensesPanel />}
           {tab === "groceries" && <GroceryPanel />}
           {tab === "roommates" && (
             <RoommatesPanel
-              groupId={groupId ?? ""}   // ✅ this is your Room ID
+              groupId={groupId ?? ""}
               roommates={roommates}
               myUid={uid ?? ""}
               isCreator={uid === createdBy}
