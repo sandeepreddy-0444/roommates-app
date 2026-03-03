@@ -25,6 +25,7 @@ import ExpensesPanel from "../../components/ExpensesPanel";
 import GroceryPanel from "../../components/GroceryPanel";
 import RoommatesPanel from "../../components/RoommatesPanel";
 import NotificationsPanel from "../../components/NotificationsPanel";
+import RemindersPanel from "../../components/RemindersPanel"; // ✅ NEW
 
 type Tab =
   | "profile"
@@ -32,7 +33,8 @@ type Tab =
   | "expenses"
   | "groceries"
   | "roommates"
-  | "notifications";
+  | "notifications"
+  | "reminders"; // ✅ NEW
 
 type Roommate = { uid: string; name: string };
 type MonthKey = { year: number; month: number }; // month: 0-11
@@ -331,6 +333,11 @@ export default function DashboardPage() {
           <button onClick={() => setTab("roommates")} style={{ marginBottom: 10, width: "100%" }}>
             Roommates
           </button>
+
+          {/* ✅ NEW: Reminders */}
+          <button onClick={() => setTab("reminders")} style={{ marginBottom: 10, width: "100%" }}>
+            Reminders
+          </button>
         </div>
 
         {/* Main */}
@@ -459,6 +466,7 @@ export default function DashboardPage() {
 
           {tab === "expenses" && <ExpensesPanel />}
           {tab === "groceries" && <GroceryPanel />}
+
           {tab === "roommates" && (
             <RoommatesPanel
               groupId={groupId ?? ""}
@@ -471,6 +479,10 @@ export default function DashboardPage() {
               onLeave={leaveRoom}
             />
           )}
+
+          {/* ✅ NEW: Reminders panel */}
+          {tab === "reminders" && <RemindersPanel groupId={groupId ?? ""} />}
+
           {tab === "notifications" && <NotificationsPanel />}
         </div>
       </div>

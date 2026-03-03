@@ -247,8 +247,9 @@ export default function NotificationsPanel() {
                           </span>
                         ) : null}
                       </div>
+
                       <div className="text-sm text-gray-300 mt-1">
-                        {n.body}
+                        {formatDate(n.body)}
                       </div>
                     </button>
                   </div>
@@ -267,4 +268,13 @@ export default function NotificationsPanel() {
       )}
     </div>
   );
+}
+
+function formatDate(body: string) {
+  // changes "Due on 2026-03-05" -> "Due on 03/05/2026"
+  const match = body.match(/\d{4}-\d{2}-\d{2}/);
+  if (!match) return body;
+
+  const [year, month, day] = match[0].split("-");
+  return body.replace(match[0], `${month}/${day}/${year}`);
 }
