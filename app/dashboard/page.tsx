@@ -106,10 +106,7 @@ export default function DashboardPage() {
           };
         });
 
-        list.sort((a, b) =>
-          a.uid === uid ? -1 : b.uid === uid ? 1 : 0
-        );
-
+        list.sort((a, b) => (a.uid === uid ? -1 : b.uid === uid ? 1 : 0));
         setRoommates(list);
       }
     );
@@ -126,11 +123,7 @@ export default function DashboardPage() {
     if (!ok) return;
 
     await deleteDoc(doc(db, "groups", groupId, "members", memberUid));
-    await setDoc(
-      doc(db, "users", memberUid),
-      { groupId: null },
-      { merge: true }
-    );
+    await setDoc(doc(db, "users", memberUid), { groupId: null }, { merge: true });
 
     alert("Roommate removed ✅");
   };
@@ -143,9 +136,7 @@ export default function DashboardPage() {
     const ok = confirm("Transfer admin?");
     if (!ok) return;
 
-    await updateDoc(doc(db, "groups", groupId), {
-      createdBy: newAdminUid,
-    });
+    await updateDoc(doc(db, "groups", groupId), { createdBy: newAdminUid });
     setCreatedBy(newAdminUid);
 
     alert("Admin transferred ✅");
@@ -176,11 +167,24 @@ export default function DashboardPage() {
     router.push("/login");
   };
 
+  // ✅ Password reset that opens YOUR APP link (clickable)
   const changePassword = async () => {
-    if (!email) return;
-    await sendPasswordResetEmail(auth, email);
-    alert("Password reset email sent ✅");
-  };
+  if (!email) {
+    alert("No email found for this account.");
+    return;
+  }
+
+  try {
+    await sendPasswordResetEmail(auth, email, {
+      url: "https://roommates-app.vercel.app/reset-password",
+      handleCodeInApp: true,
+    });
+
+    alert("Password reset email sent ✅ (check spam too)");
+  } catch (error: any) {
+    alert("Error: " + (error?.message || "Failed to send reset email"));
+  }
+};
 
   if (loading) return <div style={{ padding: 16 }}>Loading...</div>;
 
@@ -207,23 +211,38 @@ export default function DashboardPage() {
             Dashboard
           </div>
 
-          <button onClick={() => setTab("profile")} style={{ marginBottom: 10, width: "100%" }}>
+          <button
+            onClick={() => setTab("profile")}
+            style={{ marginBottom: 10, width: "100%" }}
+          >
             Profile
           </button>
 
-          <button onClick={() => setTab("expenses")} style={{ marginBottom: 10, width: "100%" }}>
+          <button
+            onClick={() => setTab("expenses")}
+            style={{ marginBottom: 10, width: "100%" }}
+          >
             Expenses
           </button>
 
-          <button onClick={() => setTab("groceries")} style={{ marginBottom: 10, width: "100%" }}>
+          <button
+            onClick={() => setTab("groceries")}
+            style={{ marginBottom: 10, width: "100%" }}
+          >
             Grocery
           </button>
 
-          <button onClick={() => setTab("roommates")} style={{ marginBottom: 10, width: "100%" }}>
+          <button
+            onClick={() => setTab("roommates")}
+            style={{ marginBottom: 10, width: "100%" }}
+          >
             Roommates
           </button>
 
-          <button onClick={() => setTab("notifications")} style={{ marginBottom: 10, width: "100%" }}>
+          <button
+            onClick={() => setTab("notifications")}
+            style={{ marginBottom: 10, width: "100%" }}
+          >
             Notifications
           </button>
         </div>
@@ -249,16 +268,16 @@ export default function DashboardPage() {
                 }}
               >
                 <h2 style={{ marginBottom: 10 }}>Profile</h2>
-                <p><strong>Name:</strong> {displayName || "Not set"}</p>
-                <p><strong>Email:</strong> {email}</p>
+                <p>
+                  <strong>Name:</strong> {displayName || "Not set"}
+                </p>
+                <p>
+                  <strong>Email:</strong> {email}
+                </p>
 
                 <div style={{ marginTop: 12, display: "flex", gap: 10 }}>
-                  <button onClick={changePassword}>
-                    Change Password
-                  </button>
-                  <button onClick={logout}>
-                    Logout
-                  </button>
+                  <button onClick={changePassword}>Change Password</button>
+                  <button onClick={logout}>Logout</button>
                 </div>
               </div>
 
