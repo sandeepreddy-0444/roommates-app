@@ -464,7 +464,9 @@ export default function DashboardPage() {
             </div>
           )}
 
+          {/* ✅ FIXED: ExpensesPanel called with NO props */}
           {tab === "expenses" && <ExpensesPanel />}
+
           {tab === "groceries" && <GroceryPanel />}
 
           {tab === "roommates" && (
