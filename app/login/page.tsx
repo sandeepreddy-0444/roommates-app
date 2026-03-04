@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/app/lib/firebase";
@@ -13,9 +13,14 @@ export default function LoginPage() {
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // ✅ Forgot password state
+  const [resetMsg, setResetMsg] = useState<string | null>(null);
+  const [resetLoading, setResetLoading] = useState(false);
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
+    setResetMsg(null);
     setLoading(true);
     try {
       await signInWithEmailAndPassword(auth, email, password);
@@ -24,6 +29,28 @@ export default function LoginPage() {
       setErr(error?.message ?? "Login failed");
     } finally {
       setLoading(false);
+    }
+  }
+
+  // ✅ Forgot password handler
+  async function onForgotPassword() {
+    setErr(null);
+    setResetMsg(null);
+
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      setErr("Enter your email above, then click “Forgot password?”");
+      return;
+    }
+
+    setResetLoading(true);
+    try {
+      await sendPasswordResetEmail(auth, trimmedEmail);
+      setResetMsg("Password reset email sent. Check your inbox (and spam).");
+    } catch (error: any) {
+      setErr(error?.message ?? "Could not send password reset email.");
+    } finally {
+      setResetLoading(false);
     }
   }
 
@@ -59,6 +86,7 @@ export default function LoginPage() {
           />
 
           {err && <p className="text-red-400 text-sm">{err}</p>}
+          {resetMsg && <p className="text-green-400 text-sm">{resetMsg}</p>}
 
           <button
             disabled={loading}
@@ -66,6 +94,18 @@ export default function LoginPage() {
           >
             {loading ? "Logging in..." : "Login"}
           </button>
+
+          {/* ✅ Forgot password link */}
+          <div className="text-center">
+            <button
+              type="button"
+              onClick={onForgotPassword}
+              disabled={resetLoading}
+              className="text-sm text-neutral-300 underline disabled:opacity-60"
+            >
+              {resetLoading ? "Sending reset email..." : "Forgot password?"}
+            </button>
+          </div>
         </form>
 
         <p className="text-sm mt-4 text-neutral-300">
