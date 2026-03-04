@@ -1,20 +1,43 @@
 "use client";
 
 import { useState } from "react";
-import { signInWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
+import {
+  signInWithEmailAndPassword,
+  sendPasswordResetEmail,
+} from "firebase/auth";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/app/lib/firebase";
+
+function friendlyAuthError(code?: string) {
+  switch (code) {
+    case "auth/invalid-email":
+      return "Please enter a valid email.";
+    case "auth/user-not-found":
+      return "No account found with that email.";
+    case "auth/wrong-password":
+      return "Incorrect password.";
+    case "auth/invalid-credential":
+      return "Incorrect email or password.";
+    case "auth/too-many-requests":
+      return "Too many attempts. Try again later.";
+    case "auth/network-request-failed":
+      return "Network error. Check your internet and try again.";
+    default:
+      return "Something went wrong. Please try again.";
+  }
+}
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [err, setErr] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [showPw, setShowPw] = useState(false);
 
-  // ✅ Forgot password state
+  const [err, setErr] = useState<string | null>(null);
   const [resetMsg, setResetMsg] = useState<string | null>(null);
+
+  const [loading, setLoading] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
@@ -23,23 +46,22 @@ export default function LoginPage() {
     setResetMsg(null);
     setLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      await signInWithEmailAndPassword(auth, email.trim(), password);
       router.push("/dashboard");
     } catch (error: any) {
-      setErr(error?.message ?? "Login failed");
+      setErr(friendlyAuthError(error?.code));
     } finally {
       setLoading(false);
     }
   }
 
-  // ✅ Forgot password handler
   async function onForgotPassword() {
     setErr(null);
     setResetMsg(null);
 
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
-      setErr("Enter your email above, then click “Forgot password?”");
+      setErr("Type your email above, then click “Forgot password?”");
       return;
     }
 
@@ -48,7 +70,7 @@ export default function LoginPage() {
       await sendPasswordResetEmail(auth, trimmedEmail);
       setResetMsg("Password reset email sent. Check your inbox (and spam).");
     } catch (error: any) {
-      setErr(error?.message ?? "Could not send password reset email.");
+      setErr(friendlyAuthError(error?.code));
     } finally {
       setResetLoading(false);
     }
@@ -76,14 +98,25 @@ export default function LoginPage() {
             onChange={(e) => setEmail(e.target.value)}
             required
           />
-          <input
-            className="w-full rounded-xl border border-neutral-800 bg-transparent p-3 text-white placeholder:text-neutral-500 outline-none focus:ring-2 focus:ring-neutral-700"
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
+
+          {/* ✅ Password with Show/Hide */}
+          <div className="relative">
+            <input
+              className="w-full rounded-xl border border-neutral-800 bg-transparent p-3 pr-12 text-white placeholder:text-neutral-500 outline-none focus:ring-2 focus:ring-neutral-700"
+              type={showPw ? "text" : "password"}
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+            <button
+              type="button"
+              onClick={() => setShowPw((v) => !v)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-neutral-300 underline"
+            >
+              {showPw ? "Hide" : "Show"}
+            </button>
+          </div>
 
           {err && <p className="text-red-400 text-sm">{err}</p>}
           {resetMsg && <p className="text-green-400 text-sm">{resetMsg}</p>}
@@ -95,13 +128,13 @@ export default function LoginPage() {
             {loading ? "Logging in..." : "Login"}
           </button>
 
-          {/* ✅ Forgot password link */}
+          {/* ✅ Forgot password */}
           <div className="text-center">
             <button
               type="button"
               onClick={onForgotPassword}
-              disabled={resetLoading}
-              className="text-sm text-neutral-300 underline disabled:opacity-60"
+              disabled={resetLoading || !email.trim()}
+              className="text-sm text-neutral-300 underline disabled:opacity-40"
             >
               {resetLoading ? "Sending reset email..." : "Forgot password?"}
             </button>
