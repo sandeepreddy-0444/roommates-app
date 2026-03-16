@@ -25,7 +25,8 @@ import ExpensesPanel from "../../components/ExpensesPanel";
 import GroceryPanel from "../../components/GroceryPanel";
 import RoommatesPanel from "../../components/RoommatesPanel";
 import NotificationsPanel from "../../components/NotificationsPanel";
-import RemindersPanel from "../../components/RemindersPanel"; // ✅ NEW
+import RemindersPanel from "../../components/RemindersPanel";
+import ChatPanel from "../../components/ChatPanel";
 
 type Tab =
   | "profile"
@@ -34,10 +35,11 @@ type Tab =
   | "groceries"
   | "roommates"
   | "notifications"
-  | "reminders"; // ✅ NEW
+  | "reminders"
+  | "chat";
 
 type Roommate = { uid: string; name: string };
-type MonthKey = { year: number; month: number }; // month: 0-11
+type MonthKey = { year: number; month: number };
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -54,21 +56,18 @@ export default function DashboardPage() {
 
   const [roommates, setRoommates] = useState<Roommate[]>([]);
 
-  // Month selector
   const baseNow = useMemo(() => new Date(), []);
   const [selectedMonth, setSelectedMonth] = useState<MonthKey>({
     year: baseNow.getFullYear(),
     month: baseNow.getMonth(),
   });
 
-  // Monthly stats
   const [monthTotal, setMonthTotal] = useState<number>(0);
   const [monthCount, setMonthCount] = useState<number>(0);
   const [youPaid, setYouPaid] = useState<number>(0);
   const [youOwe, setYouOwe] = useState<number>(0);
   const [net, setNet] = useState<number>(0);
 
-  // Bell badge
   const [unreadNotifs, setUnreadNotifs] = useState<number>(0);
 
   const loading = useMemo(() => !authChecked, [authChecked]);
@@ -94,7 +93,6 @@ export default function DashboardPage() {
     return out;
   }, []);
 
-  // Auth
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (!u) {
@@ -129,7 +127,6 @@ export default function DashboardPage() {
     return () => unsub();
   }, [router]);
 
-  // Roommates list
   useEffect(() => {
     if (!groupId) return;
 
@@ -156,7 +153,6 @@ export default function DashboardPage() {
     return () => unsub();
   }, [groupId, uid]);
 
-  // Monthly stats for selected month
   useEffect(() => {
     if (!groupId || !uid) return;
 
@@ -220,7 +216,6 @@ export default function DashboardPage() {
     return () => unsub();
   }, [groupId, uid, selectedMonth.year, selectedMonth.month]);
 
-  // Bell unread
   useEffect(() => {
     if (!groupId || !uid) return;
 
@@ -240,7 +235,6 @@ export default function DashboardPage() {
     return () => unsub();
   }, [groupId, uid]);
 
-  // Remove member
   const removeMember = async (memberUid: string) => {
     if (!groupId || !uid) return;
     if (uid !== createdBy) return alert("Only admin can remove members.");
@@ -253,7 +247,6 @@ export default function DashboardPage() {
     alert("Roommate removed ✅");
   };
 
-  // Transfer admin
   const transferAdmin = async (newAdminUid: string) => {
     if (!groupId || !uid) return;
     if (uid !== createdBy) return alert("Only admin can transfer admin.");
@@ -266,7 +259,6 @@ export default function DashboardPage() {
     alert("Admin transferred ✅");
   };
 
-  // Leave room
   const leaveRoom = async () => {
     if (!groupId || !uid) return;
 
@@ -308,7 +300,6 @@ export default function DashboardPage() {
   return (
     <div style={{ minHeight: "100vh", padding: 16, background: "#0b0b0b", color: "white" }}>
       <div style={{ display: "flex", gap: 16 }}>
-        {/* Sidebar */}
         <div style={{ width: 260, border: "1px solid #2b2b2b", borderRadius: 14, padding: 12 }}>
           <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 12 }}>
             Dashboard
@@ -334,15 +325,16 @@ export default function DashboardPage() {
             Roommates
           </button>
 
-          {/* ✅ NEW: Reminders */}
           <button onClick={() => setTab("reminders")} style={{ marginBottom: 10, width: "100%" }}>
             Reminders
           </button>
+
+          <button onClick={() => setTab("chat")} style={{ marginBottom: 10, width: "100%" }}>
+            Chat
+          </button>
         </div>
 
-        {/* Main */}
         <div style={{ flex: 1, border: "1px solid #2b2b2b", borderRadius: 14, padding: 16 }}>
-          {/* Top-right bell only */}
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
             <button
               onClick={() => setTab("notifications")}
@@ -464,7 +456,6 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* ✅ FIXED: ExpensesPanel called with NO props */}
           {tab === "expenses" && <ExpensesPanel />}
 
           {tab === "groceries" && <GroceryPanel />}
@@ -482,8 +473,9 @@ export default function DashboardPage() {
             />
           )}
 
-          {/* ✅ NEW: Reminders panel */}
           {tab === "reminders" && <RemindersPanel groupId={groupId ?? ""} />}
+
+          {tab === "chat" && <ChatPanel />}
 
           {tab === "notifications" && <NotificationsPanel />}
         </div>
