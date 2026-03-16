@@ -5,6 +5,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   onSnapshot,
@@ -12,8 +13,14 @@ import {
   query,
   serverTimestamp,
   Timestamp,
+  updateDoc,
 } from "firebase/firestore";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import {
+  deleteObject,
+  getDownloadURL,
+  ref,
+  uploadBytes,
+} from "firebase/storage";
 import { auth, db, storage } from "@/app/lib/firebase";
 
 type Message = {
@@ -22,6 +29,7 @@ type Message = {
   senderId: string;
   senderName: string;
   imageUrl?: string;
+  imagePath?: string;
   createdAt?: Timestamp;
 };
 
@@ -34,6 +42,10 @@ export default function ChatPanel() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -108,10 +120,13 @@ export default function ChatPanel() {
 
     try {
       let imageUrl = "";
+      let imagePath = "";
 
       if (file) {
         const fileName = `${Date.now()}-${file.name}`;
-        const storageRef = ref(storage, `chatImages/${groupId}/${fileName}`);
+        imagePath = `chatImages/${groupId}/${fileName}`;
+        const storageRef = ref(storage, imagePath);
+
         await uploadBytes(storageRef, file);
         imageUrl = await getDownloadURL(storageRef);
       }
@@ -121,6 +136,7 @@ export default function ChatPanel() {
         senderId: uid,
         senderName,
         imageUrl,
+        imagePath,
         createdAt: serverTimestamp(),
       });
 
@@ -136,6 +152,64 @@ export default function ChatPanel() {
     } finally {
       setSending(false);
     }
+  };
+
+  const deleteMessage = async (msg: Message) => {
+    if (!groupId || !uid) return;
+    if (msg.senderId !== uid) {
+      alert("You can only delete your own messages.");
+      return;
+    }
+
+    const ok = confirm("Delete this message?");
+    if (!ok) return;
+
+    try {
+      await deleteDoc(doc(db, "groups", groupId, "messages", msg.id));
+
+      if (msg.imagePath) {
+        try {
+          await deleteObject(ref(storage, msg.imagePath));
+        } catch (storageError) {
+          console.error("Image delete failed:", storageError);
+        }
+      }
+    } catch (error) {
+      console.error("Error deleting message:", error);
+      alert("Failed to delete message.");
+    }
+  };
+
+  const startEdit = (msg: Message) => {
+    setEditingId(msg.id);
+    setEditText(msg.text || "");
+  };
+
+  const saveEdit = async (msg: Message) => {
+    if (!groupId || !uid) return;
+    if (msg.senderId !== uid) {
+      alert("You can only edit your own messages.");
+      return;
+    }
+
+    try {
+      await updateDoc(doc(db, "groups", groupId, "messages", msg.id), {
+        text: editText.trim(),
+      });
+
+      setEditingId(null);
+      setEditText("");
+      setOpenMenuId(null);
+    } catch (error) {
+      console.error("Error editing message:", error);
+      alert("Failed to edit message.");
+    }
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditText("");
+    setOpenMenuId(null);
   };
 
   if (loading) {
@@ -186,6 +260,7 @@ export default function ChatPanel() {
               >
                 <div
                   style={{
+                    position: "relative",
                     maxWidth: "70%",
                     backgroundColor: isMe ? "#1f3a2a" : "#1a1a1a",
                     border: "1px solid #333",
@@ -198,15 +273,141 @@ export default function ChatPanel() {
                       margin: "0 0 6px 0",
                       fontWeight: 600,
                       fontSize: 14,
+                      paddingRight: isMe ? 20 : 0,
                     }}
                   >
                     {isMe ? "You" : msg.senderName}
                   </p>
 
-                  {msg.text && (
-                    <p style={{ margin: "0 0 8px 0", lineHeight: "1.4" }}>
-                      {msg.text}
-                    </p>
+                  {isMe && (
+                    <div style={{ position: "absolute", top: 8, right: 8 }}>
+                      <button
+                        onClick={() =>
+                          setOpenMenuId(openMenuId === msg.id ? null : msg.id)
+                        }
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          color: "white",
+                          fontSize: 18,
+                          cursor: "pointer",
+                          lineHeight: 1,
+                        }}
+                      >
+                        ⋮
+                      </button>
+
+                      {openMenuId === msg.id && (
+                        <div
+                          style={{
+                            position: "absolute",
+                            top: 24,
+                            right: 0,
+                            background: "#222",
+                            border: "1px solid #444",
+                            borderRadius: 8,
+                            minWidth: 100,
+                            zIndex: 10,
+                            overflow: "hidden",
+                          }}
+                        >
+                          <button
+                            onClick={() => {
+                              startEdit(msg);
+                              setOpenMenuId(null);
+                            }}
+                            style={{
+                              display: "block",
+                              width: "100%",
+                              padding: "8px 12px",
+                              background: "transparent",
+                              border: "none",
+                              color: "white",
+                              textAlign: "left",
+                              cursor: "pointer",
+                            }}
+                          >
+                            Edit
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              deleteMessage(msg);
+                              setOpenMenuId(null);
+                            }}
+                            style={{
+                              display: "block",
+                              width: "100%",
+                              padding: "8px 12px",
+                              background: "transparent",
+                              border: "none",
+                              color: "#ff8080",
+                              textAlign: "left",
+                              cursor: "pointer",
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {editingId === msg.id ? (
+                    <div style={{ marginBottom: 8 }}>
+                      <textarea
+                        value={editText}
+                        onChange={(e) => setEditText(e.target.value)}
+                        rows={2}
+                        style={{
+                          width: "100%",
+                          padding: 8,
+                          borderRadius: 8,
+                          border: "1px solid #444",
+                          marginBottom: 8,
+                          background: "#0b0b0b",
+                          color: "white",
+                          resize: "vertical",
+                        }}
+                      />
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button
+                          onClick={() => saveEdit(msg)}
+                          style={{
+                            padding: "6px 12px",
+                            borderRadius: 8,
+                            border: "none",
+                            background: "#2d6a4f",
+                            color: "white",
+                            cursor: "pointer",
+                          }}
+                        >
+                          Save
+                        </button>
+
+                        <button
+                          onClick={cancelEdit}
+                          style={{
+                            padding: "6px 12px",
+                            borderRadius: 8,
+                            border: "none",
+                            background: "#444",
+                            color: "white",
+                            cursor: "pointer",
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {msg.text && (
+                        <p style={{ margin: "0 0 8px 0", lineHeight: "1.4" }}>
+                          {msg.text}
+                        </p>
+                      )}
+                    </>
                   )}
 
                   {msg.imageUrl && (
