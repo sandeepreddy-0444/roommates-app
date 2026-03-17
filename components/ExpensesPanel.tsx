@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import {
   addDoc,
@@ -26,6 +26,13 @@ type Expense = {
   createdByUid?: string;
   paidByUid?: string;
   paidBy?: string;
+  participants?: string[];
+  splitMap?: Record<string, number>;
+};
+
+type Roommate = {
+  uid: string;
+  name: string;
 };
 
 function formatMoney(n: number) {
@@ -35,7 +42,7 @@ function formatMoney(n: number) {
 
 function toDisplayDate(value: any): string {
   if (!value) return "";
-  if (typeof value === "string") return value.slice(0, 10);
+  if (typeof value === "string") return value;
   if (value?.toDate) return value.toDate().toLocaleDateString();
   if (value instanceof Date) return value.toLocaleDateString();
   return "";
@@ -46,16 +53,24 @@ export default function ExpensesPanel() {
   const [groupId, setGroupId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
 
+  const [roommates, setRoommates] = useState<Roommate[]>([]);
+
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Add expense form
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
+  const [expenseDate, setExpenseDate] = useState(new Date().toISOString().slice(0, 10));
   const [err, setErr] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
 
-  // ✅ auth -> user -> groupId
+  const [selectedParticipants, setSelectedParticipants] = useState<Record<string, boolean>>({});
+
+  const selectedCount = useMemo(
+    () => Object.values(selectedParticipants).filter(Boolean).length,
+    [selectedParticipants]
+  );
+
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (!u) {
@@ -63,19 +78,18 @@ export default function ExpensesPanel() {
         setGroupId(null);
         setIsAdmin(false);
         setExpenses([]);
+        setRoommates([]);
         setLoading(false);
         return;
       }
 
       setUid(u.uid);
 
-      // read user's groupId
       const userSnap = await getDoc(doc(db, "users", u.uid));
       const userData = userSnap.exists() ? (userSnap.data() as any) : {};
       const gid = userData?.groupId || null;
       setGroupId(gid);
 
-      // read group createdBy to decide admin
       if (gid) {
         const groupSnap = await getDoc(doc(db, "groups", gid));
         const groupData = groupSnap.exists() ? (groupSnap.data() as any) : {};
@@ -91,7 +105,42 @@ export default function ExpensesPanel() {
     return () => unsub();
   }, []);
 
-  // ✅ listen to expenses
+  useEffect(() => {
+    if (!groupId) {
+      setRoommates([]);
+      return;
+    }
+
+    const unsub = onSnapshot(
+      collection(db, "groups", groupId, "members"),
+      async (snap) => {
+        const ids = snap.docs.map((d) => d.id);
+
+        const userDocs = await Promise.all(
+          ids.map((id) => getDoc(doc(db, "users", id)))
+        );
+
+        const list: Roommate[] = userDocs.map((docSnap, i) => {
+          const id = ids[i];
+          const data = docSnap.exists() ? (docSnap.data() as any) : {};
+          return { uid: id, name: data?.name || id.slice(0, 6) };
+        });
+
+        setRoommates(list);
+
+        setSelectedParticipants((prev) => {
+          const next: Record<string, boolean> = {};
+          for (const mate of list) {
+            next[mate.uid] = prev[mate.uid] ?? true;
+          }
+          return next;
+        });
+      }
+    );
+
+    return () => unsub();
+  }, [groupId]);
+
   useEffect(() => {
     if (!groupId) {
       setExpenses([]);
@@ -116,6 +165,8 @@ export default function ExpensesPanel() {
             createdByUid: data?.createdByUid ?? null,
             paidByUid: data?.paidByUid ?? null,
             paidBy: data?.paidBy ?? null,
+            participants: Array.isArray(data?.participants) ? data.participants : [],
+            splitMap: data?.splitMap ?? {},
           };
         });
 
@@ -127,6 +178,25 @@ export default function ExpensesPanel() {
     return () => unsub();
   }, [groupId]);
 
+  function toggleParticipant(id: string) {
+    setSelectedParticipants((prev) => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
+  }
+
+  function selectAllParticipants() {
+    const next: Record<string, boolean> = {};
+    for (const mate of roommates) next[mate.uid] = true;
+    setSelectedParticipants(next);
+  }
+
+  function clearAllParticipants() {
+    const next: Record<string, boolean> = {};
+    for (const mate of roommates) next[mate.uid] = false;
+    setSelectedParticipants(next);
+  }
+
   async function addExpense() {
     setErr(null);
 
@@ -136,6 +206,27 @@ export default function ExpensesPanel() {
     if (!t) return setErr("Title is required.");
     if (!Number.isFinite(a) || a <= 0) return setErr("Amount must be > 0.");
     if (!uid || !groupId) return setErr("Not ready (missing user or room).");
+    if (!expenseDate) return setErr("Expense date is required.");
+
+    const participants = roommates
+      .filter((r) => selectedParticipants[r.uid])
+      .map((r) => r.uid);
+
+    if (participants.length === 0) {
+      return setErr("Select at least one roommate to split the expense.");
+    }
+
+    const share = Math.round((a / participants.length) * 100) / 100;
+    const splitMap: Record<string, number> = {};
+
+    participants.forEach((id, index) => {
+      if (index === participants.length - 1) {
+        const assignedSoFar = Object.values(splitMap).reduce((sum, v) => sum + v, 0);
+        splitMap[id] = Math.round((a - assignedSoFar) * 100) / 100;
+      } else {
+        splitMap[id] = share;
+      }
+    });
 
     setAdding(true);
     try {
@@ -144,14 +235,22 @@ export default function ExpensesPanel() {
       await addDoc(col, {
         title: t,
         amount: a,
+        date: expenseDate,
         createdAt: serverTimestamp(),
         createdBy: uid,
         createdByUid: uid,
         paidByUid: uid,
+        participants,
+        splitMap,
       });
 
       setTitle("");
       setAmount("");
+      setExpenseDate(new Date().toISOString().slice(0, 10));
+
+      const resetSelection: Record<string, boolean> = {};
+      for (const mate of roommates) resetSelection[mate.uid] = true;
+      setSelectedParticipants(resetSelection);
     } catch (e: any) {
       setErr(e?.message ?? "Failed to add expense.");
     } finally {
@@ -176,7 +275,6 @@ export default function ExpensesPanel() {
     <div style={{ display: "grid", gap: 14 }}>
       <h2 style={{ margin: 0 }}>Expenses</h2>
 
-      {/* Add Expense */}
       <div
         style={{
           border: "1px solid #2b2b2b",
@@ -193,14 +291,7 @@ export default function ExpensesPanel() {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Title (e.g., Dinner)"
-          style={{
-            background: "#0b0b0b",
-            color: "white",
-            border: "1px solid #2b2b2b",
-            borderRadius: 10,
-            padding: "10px 12px",
-            outline: "none",
-          }}
+          style={inputStyle}
           disabled={adding}
         />
 
@@ -209,16 +300,71 @@ export default function ExpensesPanel() {
           onChange={(e) => setAmount(e.target.value)}
           placeholder="Amount (e.g., 25)"
           inputMode="decimal"
-          style={{
-            background: "#0b0b0b",
-            color: "white",
-            border: "1px solid #2b2b2b",
-            borderRadius: 10,
-            padding: "10px 12px",
-            outline: "none",
-          }}
+          style={inputStyle}
           disabled={adding}
         />
+
+        <input
+          type="date"
+          value={expenseDate}
+          onChange={(e) => setExpenseDate(e.target.value)}
+          style={inputStyle}
+          disabled={adding}
+        />
+
+        <div
+          style={{
+            border: "1px solid #2b2b2b",
+            borderRadius: 10,
+            padding: 12,
+            background: "#0b0b0b",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ fontWeight: 800 }}>Split with roommates</div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button type="button" onClick={selectAllParticipants} style={miniBtnStyle}>
+                Select all
+              </button>
+              <button type="button" onClick={clearAllParticipants} style={miniBtnStyle}>
+                Clear all
+              </button>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
+            {roommates.map((mate) => (
+              <label
+                key={mate.uid}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  border: "1px solid #222",
+                  borderRadius: 10,
+                  padding: "10px 12px",
+                  background: "#111",
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={!!selectedParticipants[mate.uid]}
+                  onChange={() => toggleParticipant(mate.uid)}
+                />
+                <span>
+                  {mate.name} {mate.uid === uid ? "(You)" : ""}
+                </span>
+              </label>
+            ))}
+          </div>
+
+          <div style={{ marginTop: 10, fontSize: 13, opacity: 0.8 }}>
+            {selectedCount > 0 && amount && Number(amount) > 0
+              ? `Each selected roommate owes about $${formatMoney(Number(amount) / selectedCount)}`
+              : "Select roommates to split this expense equally."}
+          </div>
+        </div>
 
         {err && <div style={{ color: "#fca5a5", fontSize: 13 }}>{err}</div>}
 
@@ -240,7 +386,6 @@ export default function ExpensesPanel() {
         </button>
       </div>
 
-      {/* Expenses List */}
       <div
         style={{
           border: "1px solid #2b2b2b",
@@ -269,11 +414,18 @@ export default function ExpensesPanel() {
                   background: "#0b0b0b",
                 }}
               >
-                <div style={{ display: "grid", gap: 2 }}>
+                <div style={{ display: "grid", gap: 4 }}>
                   <div style={{ fontWeight: 900 }}>{exp.title}</div>
+
                   <div style={{ fontSize: 13, opacity: 0.75 }}>
                     {toDisplayDate(exp.date || exp.createdAt)}
                   </div>
+
+                  {exp.participants && exp.participants.length > 0 ? (
+                    <div style={{ fontSize: 12, opacity: 0.7 }}>
+                      Split with {exp.participants.length} roommate(s)
+                    </div>
+                  ) : null}
                 </div>
 
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -281,7 +433,6 @@ export default function ExpensesPanel() {
                     ${formatMoney(Number(exp.amount) || 0)}
                   </div>
 
-                  {/* ✅ Edit/Delete buttons */}
                   {uid && (
                     <ExpenseActions
                       groupId={groupId}
@@ -311,3 +462,21 @@ export default function ExpensesPanel() {
     </div>
   );
 }
+
+const inputStyle: React.CSSProperties = {
+  background: "#0b0b0b",
+  color: "white",
+  border: "1px solid #2b2b2b",
+  borderRadius: 10,
+  padding: "10px 12px",
+  outline: "none",
+};
+
+const miniBtnStyle: React.CSSProperties = {
+  border: "1px solid #2b2b2b",
+  borderRadius: 8,
+  padding: "6px 10px",
+  background: "#111",
+  color: "white",
+  cursor: "pointer",
+};

@@ -35,7 +35,6 @@ export default function NotificationsPanel() {
   const [groupId, setGroupId] = useState<string | null>(null);
   const [rows, setRows] = useState<Notif[]>([]);
   const [loading, setLoading] = useState(true);
-
   const [selected, setSelected] = useState<Record<string, boolean>>({});
 
   const notifsCol = useMemo(() => {
@@ -49,6 +48,7 @@ export default function NotificationsPanel() {
         router.push("/login");
         return;
       }
+
       setUid(u.uid);
 
       const userDoc = await getDoc(doc(db, "users", u.uid));
@@ -86,7 +86,6 @@ export default function NotificationsPanel() {
 
       setRows(items);
 
-      // Clean selected state
       setSelected((prev) => {
         const next: Record<string, boolean> = {};
         const ids = new Set(items.map((x) => x.id));
@@ -144,8 +143,7 @@ export default function NotificationsPanel() {
   }
 
   async function deleteSelected() {
-    if (!groupId) return;
-    if (selectedIds.length === 0) return;
+    if (!groupId || selectedIds.length === 0) return;
 
     const ok = confirm(`Delete ${selectedIds.length} selected notification(s)?`);
     if (!ok) return;
@@ -159,8 +157,7 @@ export default function NotificationsPanel() {
   }
 
   async function deleteAll() {
-    if (!groupId) return;
-    if (rows.length === 0) return;
+    if (!groupId || rows.length === 0) return;
 
     const ok = confirm(`Delete ALL notifications (${rows.length})?`);
     if (!ok) return;
@@ -177,7 +174,7 @@ export default function NotificationsPanel() {
 
   return (
     <div className="space-y-4 text-white">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h2 className="text-lg font-semibold">Notifications</h2>
           <p className="text-sm text-gray-400">Unread: {unreadCount}</p>
@@ -226,7 +223,7 @@ export default function NotificationsPanel() {
                 style={{ opacity: isUnread ? 1 : 0.65 }}
               >
                 <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3">
+                  <div className="flex items-start gap-3 flex-1">
                     <input
                       type="checkbox"
                       checked={isChecked}
@@ -236,10 +233,10 @@ export default function NotificationsPanel() {
 
                     <button
                       onClick={() => markOneRead(n.id)}
-                      className="text-left"
+                      className="text-left flex-1"
                       style={{ width: "100%" }}
                     >
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <div className="font-semibold">{n.title}</div>
                         {isUnread ? (
                           <span className="text-xs px-2 py-1 rounded border">
@@ -248,8 +245,14 @@ export default function NotificationsPanel() {
                         ) : null}
                       </div>
 
-                      <div className="text-sm text-gray-300 mt-1">
-                        {formatDate(n.body)}
+                      {n.body ? (
+                        <div className="text-sm text-gray-300 mt-1">
+                          {formatBodyText(n.body)}
+                        </div>
+                      ) : null}
+
+                      <div className="text-xs text-gray-500 mt-2">
+                        {formatCreatedAt(n.createdAt)}
                       </div>
                     </button>
                   </div>
@@ -270,11 +273,25 @@ export default function NotificationsPanel() {
   );
 }
 
-function formatDate(body: string) {
-  // changes "Due on 2026-03-05" -> "Due on 03/05/2026"
+function formatBodyText(body: string) {
   const match = body.match(/\d{4}-\d{2}-\d{2}/);
   if (!match) return body;
 
   const [year, month, day] = match[0].split("-");
   return body.replace(match[0], `${month}/${day}/${year}`);
+}
+
+function formatCreatedAt(value: any) {
+  if (!value) return "";
+  try {
+    if (value?.toDate) {
+      return value.toDate().toLocaleString();
+    }
+    if (value instanceof Date) {
+      return value.toLocaleString();
+    }
+    return "";
+  } catch {
+    return "";
+  }
 }

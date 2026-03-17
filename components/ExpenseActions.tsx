@@ -8,16 +8,13 @@ type Expense = {
   id: string;
   title: string;
   amount: number;
-  // Store as ISO string (recommended) OR Firestore Timestamp; we handle both
   date?: any;
   createdBy?: string;
 };
 
 function toInputDate(value: any): string {
-  // supports: ISO string, Date, Firestore Timestamp
   if (!value) return "";
   if (typeof value === "string") {
-    // ISO like 2026-03-04 or 2026-03-04T...
     return value.slice(0, 10);
   }
   if (value instanceof Date) {
@@ -69,8 +66,9 @@ export default function ExpenseActions({
     const nextAmount = Number(amount);
 
     if (!nextTitle) return setErr("Title is required.");
-    if (!Number.isFinite(nextAmount) || nextAmount <= 0)
+    if (!Number.isFinite(nextAmount) || nextAmount <= 0) {
       return setErr("Amount must be a number greater than 0.");
+    }
     if (!dateStr) return setErr("Date is required.");
 
     setSaving(true);
@@ -78,7 +76,6 @@ export default function ExpenseActions({
       await updateDoc(expenseRef, {
         title: nextTitle,
         amount: nextAmount,
-        // store as YYYY-MM-DD (simple + consistent)
         date: dateStr,
         updatedAt: new Date(),
       });
@@ -110,7 +107,6 @@ export default function ExpenseActions({
 
   return (
     <>
-      {/* Buttons beside an expense row */}
       <div className="flex gap-2">
         <button
           type="button"
@@ -136,7 +132,6 @@ export default function ExpenseActions({
         </button>
       </div>
 
-      {/* Modal */}
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div

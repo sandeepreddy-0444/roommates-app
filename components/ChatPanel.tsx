@@ -31,6 +31,7 @@ type Message = {
   imageUrl?: string;
   imagePath?: string;
   createdAt?: Timestamp;
+  editedAt?: any;
 };
 
 export default function ChatPanel() {
@@ -101,6 +102,12 @@ export default function ChatPanel() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    const closeMenu = () => setOpenMenuId(null);
+    window.addEventListener("click", closeMenu);
+    return () => window.removeEventListener("click", closeMenu);
+  }, []);
 
   const formatTime = (timestamp?: Timestamp) => {
     if (!timestamp) return "";
@@ -183,6 +190,7 @@ export default function ChatPanel() {
   const startEdit = (msg: Message) => {
     setEditingId(msg.id);
     setEditText(msg.text || "");
+    setOpenMenuId(null);
   };
 
   const saveEdit = async (msg: Message) => {
@@ -195,6 +203,7 @@ export default function ChatPanel() {
     try {
       await updateDoc(doc(db, "groups", groupId, "messages", msg.id), {
         text: editText.trim(),
+        editedAt: serverTimestamp(),
       });
 
       setEditingId(null);
@@ -212,25 +221,12 @@ export default function ChatPanel() {
     setOpenMenuId(null);
   };
 
-  if (loading) {
-    return <div>Loading chat...</div>;
-  }
-
-  if (!uid) {
-    return <div>Please log in first.</div>;
-  }
-
-  if (!groupId) {
-    return <div>You are not in a room yet.</div>;
-  }
+  if (loading) return <div>Loading chat...</div>;
+  if (!uid) return <div>Please log in first.</div>;
+  if (!groupId) return <div>You are not in a room yet.</div>;
 
   return (
-    <div
-      style={{
-        display: "grid",
-        gap: 16,
-      }}
-    >
+    <div style={{ display: "grid", gap: 16 }}>
       <h2 style={{ margin: 0 }}>Room Chat</h2>
 
       <div
@@ -280,7 +276,10 @@ export default function ChatPanel() {
                   </p>
 
                   {isMe && (
-                    <div style={{ position: "absolute", top: 8, right: 8 }}>
+                    <div
+                      style={{ position: "absolute", top: 8, right: 8 }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <button
                         onClick={() =>
                           setOpenMenuId(openMenuId === msg.id ? null : msg.id)
@@ -312,20 +311,8 @@ export default function ChatPanel() {
                           }}
                         >
                           <button
-                            onClick={() => {
-                              startEdit(msg);
-                              setOpenMenuId(null);
-                            }}
-                            style={{
-                              display: "block",
-                              width: "100%",
-                              padding: "8px 12px",
-                              background: "transparent",
-                              border: "none",
-                              color: "white",
-                              textAlign: "left",
-                              cursor: "pointer",
-                            }}
+                            onClick={() => startEdit(msg)}
+                            style={menuBtnStyle}
                           >
                             Edit
                           </button>
@@ -336,14 +323,8 @@ export default function ChatPanel() {
                               setOpenMenuId(null);
                             }}
                             style={{
-                              display: "block",
-                              width: "100%",
-                              padding: "8px 12px",
-                              background: "transparent",
-                              border: "none",
+                              ...menuBtnStyle,
                               color: "#ff8080",
-                              textAlign: "left",
-                              cursor: "pointer",
                             }}
                           >
                             Delete
@@ -371,31 +352,11 @@ export default function ChatPanel() {
                         }}
                       />
                       <div style={{ display: "flex", gap: 8 }}>
-                        <button
-                          onClick={() => saveEdit(msg)}
-                          style={{
-                            padding: "6px 12px",
-                            borderRadius: 8,
-                            border: "none",
-                            background: "#2d6a4f",
-                            color: "white",
-                            cursor: "pointer",
-                          }}
-                        >
+                        <button onClick={() => saveEdit(msg)} style={saveBtnStyle}>
                           Save
                         </button>
 
-                        <button
-                          onClick={cancelEdit}
-                          style={{
-                            padding: "6px 12px",
-                            borderRadius: 8,
-                            border: "none",
-                            background: "#444",
-                            color: "white",
-                            cursor: "pointer",
-                          }}
-                        >
+                        <button onClick={cancelEdit} style={cancelBtnStyle}>
                           Cancel
                         </button>
                       </div>
@@ -403,7 +364,7 @@ export default function ChatPanel() {
                   ) : (
                     <>
                       {msg.text && (
-                        <p style={{ margin: "0 0 8px 0", lineHeight: "1.4" }}>
+                        <p style={{ margin: "0 0 8px 0", lineHeight: "1.4", whiteSpace: "pre-wrap" }}>
                           {msg.text}
                         </p>
                       )}
@@ -411,17 +372,19 @@ export default function ChatPanel() {
                   )}
 
                   {msg.imageUrl && (
-                    <img
-                      src={msg.imageUrl}
-                      alt="chat upload"
-                      style={{
-                        width: "100%",
-                        maxWidth: "260px",
-                        borderRadius: 10,
-                        display: "block",
-                        marginBottom: 8,
-                      }}
-                    />
+                    <a href={msg.imageUrl} target="_blank" rel="noreferrer">
+                      <img
+                        src={msg.imageUrl}
+                        alt="chat upload"
+                        style={{
+                          width: "100%",
+                          maxWidth: "260px",
+                          borderRadius: 10,
+                          display: "block",
+                          marginBottom: 8,
+                        }}
+                      />
+                    </a>
                   )}
 
                   <p
@@ -431,7 +394,7 @@ export default function ChatPanel() {
                       color: "#aaa",
                     }}
                   >
-                    {formatTime(msg.createdAt)}
+                    {formatTime(msg.createdAt)} {msg.editedAt ? "• edited" : ""}
                   </p>
                 </div>
               </div>
@@ -454,6 +417,12 @@ export default function ChatPanel() {
           value={text}
           onChange={(e) => setText(e.target.value)}
           rows={3}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              sendMessage();
+            }
+          }}
           style={{
             width: "100%",
             padding: 10,
@@ -492,8 +461,9 @@ export default function ChatPanel() {
             borderRadius: 8,
             border: "none",
             cursor: sending ? "not-allowed" : "pointer",
-            background: "#222",
-            color: "white",
+            background: "white",
+            color: "black",
+            fontWeight: 800,
           }}
         >
           {sending ? "Sending..." : "Send"}
@@ -502,3 +472,32 @@ export default function ChatPanel() {
     </div>
   );
 }
+
+const menuBtnStyle: React.CSSProperties = {
+  display: "block",
+  width: "100%",
+  padding: "8px 12px",
+  background: "transparent",
+  border: "none",
+  color: "white",
+  textAlign: "left",
+  cursor: "pointer",
+};
+
+const saveBtnStyle: React.CSSProperties = {
+  padding: "6px 12px",
+  borderRadius: 8,
+  border: "none",
+  background: "#2d6a4f",
+  color: "white",
+  cursor: "pointer",
+};
+
+const cancelBtnStyle: React.CSSProperties = {
+  padding: "6px 12px",
+  borderRadius: 8,
+  border: "none",
+  background: "#444",
+  color: "white",
+  cursor: "pointer",
+};

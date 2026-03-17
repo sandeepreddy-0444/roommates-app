@@ -10,13 +10,14 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  updateDoc,
 } from "firebase/firestore";
 import { db } from "@/app/lib/firebase";
 
 type Reminder = {
   id: string;
   title: string;
-  dueDate: string; // YYYY-MM-DD
+  dueDate: string;
   repeat: "none" | "monthly";
   isActive: boolean;
 };
@@ -76,6 +77,12 @@ export default function RemindersPanel({ groupId }: { groupId: string }) {
     await deleteDoc(doc(db, "groups", groupId, "reminders", id));
   }
 
+  async function toggleReminder(reminder: Reminder) {
+    await updateDoc(doc(db, "groups", groupId, "reminders", reminder.id), {
+      isActive: !reminder.isActive,
+    });
+  }
+
   return (
     <div style={{ display: "grid", gap: 12 }}>
       <div
@@ -93,38 +100,20 @@ export default function RemindersPanel({ groupId }: { groupId: string }) {
             placeholder="e.g. Rent, Wifi, Gas"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            style={{
-              background: "#0b0b0b",
-              color: "white",
-              border: "1px solid #2b2b2b",
-              borderRadius: 10,
-              padding: "10px 12px",
-            }}
+            style={inputStyle}
           />
 
           <input
             type="date"
             value={dueDate}
             onChange={(e) => setDueDate(e.target.value)}
-            style={{
-              background: "#0b0b0b",
-              color: "white",
-              border: "1px solid #2b2b2b",
-              borderRadius: 10,
-              padding: "10px 12px",
-            }}
+            style={inputStyle}
           />
 
           <select
             value={repeat}
-            onChange={(e) => setRepeat(e.target.value as any)}
-            style={{
-              background: "#0b0b0b",
-              color: "white",
-              border: "1px solid #2b2b2b",
-              borderRadius: 10,
-              padding: "10px 12px",
-            }}
+            onChange={(e) => setRepeat(e.target.value as "none" | "monthly")}
+            style={inputStyle}
           >
             <option value="none">No repeat</option>
             <option value="monthly">Repeat monthly</option>
@@ -136,8 +125,8 @@ export default function RemindersPanel({ groupId }: { groupId: string }) {
               border: "1px solid #2b2b2b",
               borderRadius: 12,
               padding: "10px 12px",
-              background: "#0b0b0b",
-              color: "white",
+              background: "white",
+              color: "black",
               cursor: "pointer",
               fontWeight: 800,
             }}
@@ -173,6 +162,8 @@ export default function RemindersPanel({ groupId }: { groupId: string }) {
                   borderRadius: 12,
                   padding: 12,
                   background: "#0b0b0b",
+                  opacity: r.isActive ? 1 : 0.55,
+                  flexWrap: "wrap",
                 }}
               >
                 <div style={{ display: "grid", gap: 2 }}>
@@ -180,21 +171,40 @@ export default function RemindersPanel({ groupId }: { groupId: string }) {
                   <div style={{ fontSize: 13, opacity: 0.8 }}>
                     Due: {formatMDY(r.dueDate)} • Repeat: {r.repeat}
                   </div>
+                  <div style={{ fontSize: 12, opacity: 0.7 }}>
+                    Status: {r.isActive ? "Active" : "Paused"}
+                  </div>
                 </div>
 
-                <button
-                  onClick={() => removeReminder(r.id)}
-                  style={{
-                    border: "1px solid #2b2b2b",
-                    borderRadius: 10,
-                    padding: "8px 10px",
-                    background: "#111",
-                    color: "white",
-                    cursor: "pointer",
-                  }}
-                >
-                  Delete
-                </button>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button
+                    onClick={() => toggleReminder(r)}
+                    style={{
+                      border: "1px solid #2b2b2b",
+                      borderRadius: 10,
+                      padding: "8px 10px",
+                      background: "#111",
+                      color: "white",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {r.isActive ? "Pause" : "Activate"}
+                  </button>
+
+                  <button
+                    onClick={() => removeReminder(r.id)}
+                    style={{
+                      border: "1px solid #4b1c1c",
+                      borderRadius: 10,
+                      padding: "8px 10px",
+                      background: "#111",
+                      color: "#fca5a5",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -203,6 +213,14 @@ export default function RemindersPanel({ groupId }: { groupId: string }) {
     </div>
   );
 }
+
+const inputStyle: React.CSSProperties = {
+  background: "#0b0b0b",
+  color: "white",
+  border: "1px solid #2b2b2b",
+  borderRadius: 10,
+  padding: "10px 12px",
+};
 
 function formatMDY(ymd: string) {
   const [y, m, d] = (ymd || "").split("-");

@@ -173,11 +173,8 @@ export default function DashboardPage() {
         for (const d of snap.docs) {
           const data = d.data() as any;
 
-          const ts = data?.createdAt;
-          const dt: Date | null =
-            ts?.toDate ? ts.toDate() : ts instanceof Date ? ts : null;
+          const dt = getExpenseDate(data);
           if (!dt) continue;
-
           if (dt < start || dt >= end) continue;
 
           const amt = Number(data?.amount);
@@ -300,52 +297,71 @@ export default function DashboardPage() {
   if (loading) return <div style={{ padding: 16 }}>Loading...</div>;
 
   return (
-    <div style={{ minHeight: "100vh", padding: 16, background: "#0b0b0b", color: "white" }}>
-      <div style={{ display: "flex", gap: 16 }}>
-        <div style={{ width: 260, border: "1px solid #2b2b2b", borderRadius: 14, padding: 12 }}>
-          <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 12 }}>
+    <div
+      style={{
+        minHeight: "100vh",
+        padding: 16,
+        background: "#0b0b0b",
+        color: "white",
+      }}
+    >
+      <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+        <div
+          style={{
+            width: 260,
+            border: "1px solid #2b2b2b",
+            borderRadius: 16,
+            padding: 14,
+            background: "#111",
+            position: "sticky",
+            top: 16,
+          }}
+        >
+          <div style={{ fontSize: 22, fontWeight: 900, marginBottom: 14 }}>
             Dashboard
           </div>
 
-          <button onClick={() => setTab("profile")} style={{ marginBottom: 10, width: "100%" }}>
-            Profile
-          </button>
+          <SidebarButton label="Profile" active={tab === "profile"} onClick={() => setTab("profile")} />
+          <SidebarButton label="This Month" active={tab === "thisMonth"} onClick={() => setTab("thisMonth")} />
+          <SidebarButton label="Expenses" active={tab === "expenses"} onClick={() => setTab("expenses")} />
+          <SidebarButton label="Grocery" active={tab === "groceries"} onClick={() => setTab("groceries")} />
+          <SidebarButton label="Roommates" active={tab === "roommates"} onClick={() => setTab("roommates")} />
+          <SidebarButton label="Reminders" active={tab === "reminders"} onClick={() => setTab("reminders")} />
+          <SidebarButton label="Chat" active={tab === "chat"} onClick={() => setTab("chat")} />
 
-          <button onClick={() => setTab("thisMonth")} style={{ marginBottom: 10, width: "100%" }}>
-            This Month
-          </button>
-
-          <button onClick={() => setTab("expenses")} style={{ marginBottom: 10, width: "100%" }}>
-            Expenses
-          </button>
-
-          <button onClick={() => setTab("groceries")} style={{ marginBottom: 10, width: "100%" }}>
-            Grocery
-          </button>
-
-          <button onClick={() => setTab("roommates")} style={{ marginBottom: 10, width: "100%" }}>
-            Roommates
-          </button>
-
-          <button onClick={() => setTab("reminders")} style={{ marginBottom: 10, width: "100%" }}>
-            Reminders
-          </button>
-
-          <button onClick={() => setTab("chat")} style={{ marginBottom: 10, width: "100%" }}>
-            Chat
-          </button>
+          <div
+            style={{
+              marginTop: 16,
+              borderTop: "1px solid #2b2b2b",
+              paddingTop: 14,
+              fontSize: 13,
+              opacity: 0.8,
+            }}
+          >
+            <div><strong>Name:</strong> {myName || "Not set"}</div>
+            <div style={{ marginTop: 6 }}><strong>Role:</strong> {uid === createdBy ? "Admin" : "Member"}</div>
+          </div>
         </div>
 
-        <div style={{ flex: 1, border: "1px solid #2b2b2b", borderRadius: 14, padding: 16 }}>
+        <div
+          style={{
+            flex: 1,
+            border: "1px solid #2b2b2b",
+            borderRadius: 16,
+            padding: 16,
+            background: "#111",
+            minHeight: "80vh",
+          }}
+        >
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
             <button
               onClick={() => setTab("notifications")}
               style={{
                 position: "relative",
-                border: "1px solid #2b2b2b",
+                border: tab === "notifications" ? "1px solid white" : "1px solid #2b2b2b",
                 borderRadius: 12,
                 padding: "10px 12px",
-                background: "#111",
+                background: "#0b0b0b",
                 color: "white",
                 cursor: "pointer",
                 fontWeight: 800,
@@ -376,7 +392,14 @@ export default function DashboardPage() {
 
           {tab === "profile" && (
             <div style={{ display: "grid", gap: 14 }}>
-              <div style={{ border: "1px solid #333", borderRadius: 12, padding: 16, background: "#111" }}>
+              <div
+                style={{
+                  border: "1px solid #333",
+                  borderRadius: 12,
+                  padding: 16,
+                  background: "#0b0b0b",
+                }}
+              >
                 <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
                   <div
                     style={{
@@ -384,7 +407,7 @@ export default function DashboardPage() {
                       height: 54,
                       borderRadius: 999,
                       border: "1px solid #2b2b2b",
-                      background: "#0b0b0b",
+                      background: "#111",
                       display: "grid",
                       placeItems: "center",
                       fontWeight: 900,
@@ -396,7 +419,7 @@ export default function DashboardPage() {
 
                   <div style={{ display: "grid", gap: 2 }}>
                     <h2 style={{ margin: 0 }}>Profile</h2>
-                    <div style={{ fontSize: 13, opacity: 0.8 }}>Account</div>
+                    <div style={{ fontSize: 13, opacity: 0.8 }}>Account details</div>
                   </div>
                 </div>
 
@@ -406,12 +429,19 @@ export default function DashboardPage() {
                 </div>
 
                 <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <button onClick={changePassword}>Change Password</button>
-                  <button onClick={logout}>Logout</button>
+                  <button onClick={changePassword} style={actionBtnStyle}>Change Password</button>
+                  <button onClick={logout} style={dangerBtnStyle}>Logout</button>
                 </div>
               </div>
 
-              <div style={{ border: "1px solid #333", borderRadius: 12, padding: 16, background: "#111" }}>
+              <div
+                style={{
+                  border: "1px solid #333",
+                  borderRadius: 12,
+                  padding: 16,
+                  background: "#0b0b0b",
+                }}
+              >
                 <h3 style={{ marginTop: 0 }}>Room</h3>
                 <p><strong>Role:</strong> {uid === createdBy ? "Admin" : "Member"}</p>
                 <p><strong>Room ID:</strong> {groupId}</p>
@@ -432,7 +462,7 @@ export default function DashboardPage() {
                     setSelectedMonth({ year: y, month: m });
                   }}
                   style={{
-                    background: "#111",
+                    background: "#0b0b0b",
                     color: "white",
                     border: "1px solid #2b2b2b",
                     borderRadius: 10,
@@ -458,7 +488,6 @@ export default function DashboardPage() {
           )}
 
           {tab === "expenses" && <ExpensesPanel />}
-
           {tab === "groceries" && <GroceryPanel />}
 
           {tab === "roommates" && (
@@ -475,9 +504,7 @@ export default function DashboardPage() {
           )}
 
           {tab === "reminders" && <RemindersPanel groupId={groupId ?? ""} />}
-
           {tab === "chat" && <ChatPanel />}
-
           {tab === "notifications" && <NotificationsPanel />}
         </div>
       </div>
@@ -485,14 +512,72 @@ export default function DashboardPage() {
   );
 }
 
+function SidebarButton({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        marginBottom: 10,
+        width: "100%",
+        textAlign: "left",
+        padding: "11px 12px",
+        borderRadius: 12,
+        border: active ? "1px solid white" : "1px solid #2b2b2b",
+        background: active ? "#1a1a1a" : "#0b0b0b",
+        color: "white",
+        fontWeight: active ? 900 : 700,
+        cursor: "pointer",
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
 function StatCard({ title, value }: { title: string; value: string }) {
   return (
-    <div style={{ border: "1px solid #2b2b2b", borderRadius: 12, padding: "10px 12px", background: "#111", minWidth: 160 }}>
+    <div
+      style={{
+        border: "1px solid #2b2b2b",
+        borderRadius: 12,
+        padding: "10px 12px",
+        background: "#0b0b0b",
+        minWidth: 160,
+      }}
+    >
       <div style={{ fontSize: 12, opacity: 0.75 }}>{title}</div>
       <div style={{ fontSize: 18, fontWeight: 900 }}>{value}</div>
     </div>
   );
 }
+
+const actionBtnStyle: React.CSSProperties = {
+  border: "1px solid #2b2b2b",
+  borderRadius: 10,
+  padding: "10px 12px",
+  background: "white",
+  color: "black",
+  fontWeight: 800,
+  cursor: "pointer",
+};
+
+const dangerBtnStyle: React.CSSProperties = {
+  border: "1px solid #7f1d1d",
+  borderRadius: 10,
+  padding: "10px 12px",
+  background: "#2a0f0f",
+  color: "#fecaca",
+  fontWeight: 800,
+  cursor: "pointer",
+};
 
 function monthLabel(year: number, month: number) {
   const d = new Date(year, month, 1);
@@ -517,6 +602,20 @@ function formatMoney(n: number) {
   return v.toFixed(2);
 }
 
+function getExpenseDate(data: any): Date | null {
+  const dateValue = data?.date;
+  if (typeof dateValue === "string") {
+    const d = new Date(`${dateValue}T00:00:00`);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  const ts = data?.createdAt;
+  if (ts?.toDate) return ts.toDate();
+  if (ts instanceof Date) return ts;
+
+  return null;
+}
+
 function estimateOwedForUser(data: any, uid: string, amount: number): number {
   const map = data?.splits ?? data?.shares ?? data?.owedBy ?? data?.splitMap ?? null;
   if (map && typeof map === "object") {
@@ -525,7 +624,13 @@ function estimateOwedForUser(data: any, uid: string, amount: number): number {
     if (Number.isFinite(num)) return num;
   }
 
-  const arr = data?.participants ?? data?.participantUids ?? data?.splitBetween ?? data?.sharedWith ?? null;
+  const arr =
+    data?.participants ??
+    data?.participantUids ??
+    data?.splitBetween ??
+    data?.sharedWith ??
+    null;
+
   if (Array.isArray(arr) && arr.length > 0) {
     const hasMe = arr.map(String).includes(String(uid));
     if (!hasMe) return 0;
