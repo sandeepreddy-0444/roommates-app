@@ -268,7 +268,9 @@ export default function DashboardPage() {
       return;
     }
 
-    const ok = confirm("Leave this room?");
+    const ok = confirm(
+      "Are you sure you want to leave this room?\n\nYou will lose access to this room's chat, expenses, reminders, and roommate list."
+    );
     if (!ok) return;
 
     await deleteDoc(doc(db, "groups", groupId, "members", uid));
@@ -413,7 +415,6 @@ export default function DashboardPage() {
                 <h3 style={{ marginTop: 0 }}>Room</h3>
                 <p><strong>Role:</strong> {uid === createdBy ? "Admin" : "Member"}</p>
                 <p><strong>Room ID:</strong> {groupId}</p>
-                <button onClick={leaveRoom} style={{ marginTop: 8 }}>Leave Room</button>
               </div>
             </div>
           )}
