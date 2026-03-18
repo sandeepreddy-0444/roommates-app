@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import {
   onAuthStateChanged,
@@ -27,6 +27,10 @@ import RoommatesPanel from "../../components/RoommatesPanel";
 import NotificationsPanel from "../../components/NotificationsPanel";
 import RemindersPanel from "../../components/RemindersPanel";
 import ChatPanel from "../../components/ChatPanel";
+import AIAssistantPanel from "../../components/AIAssistantPanel";
+import ChoresPanel from "../../components/ChoresPanel";
+import SettlementsPanel from "../../components/SettlementsPanel";
+import AnalyticsPanel from "../../components/AnalyticsPanel";
 
 type Tab =
   | "profile"
@@ -36,7 +40,11 @@ type Tab =
   | "roommates"
   | "notifications"
   | "reminders"
-  | "chat";
+  | "chat"
+  | "ai"
+  | "chores"
+  | "settlements"
+  | "analytics";
 
 type Roommate = { uid: string; name: string };
 type MonthKey = { year: number; month: number };
@@ -294,14 +302,14 @@ export default function DashboardPage() {
     }
   };
 
-  if (loading) return <div style={{ padding: 16 }}>Loading...</div>;
+  if (loading) return <div style={{ padding: 16, color: "white" }}>Loading...</div>;
 
   return (
     <div
       style={{
         minHeight: "100vh",
         padding: 16,
-        background: "#0b0b0b",
+        background: "linear-gradient(180deg, #0b1020 0%, #111827 45%, #0b0b0b 100%)",
         color: "white",
       }}
     >
@@ -309,47 +317,66 @@ export default function DashboardPage() {
         <div
           style={{
             width: 260,
-            border: "1px solid #2b2b2b",
-            borderRadius: 16,
+            border: "1px solid rgba(255,255,255,0.08)",
+            borderRadius: 18,
             padding: 14,
-            background: "#111",
+            background: "rgba(17, 24, 39, 0.88)",
+            backdropFilter: "blur(10px)",
+            boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
             position: "sticky",
             top: 16,
           }}
         >
-          <div style={{ fontSize: 22, fontWeight: 900, marginBottom: 14 }}>
-            Dashboard
+          <div
+            style={{
+              fontSize: 24,
+              fontWeight: 900,
+              marginBottom: 14,
+              background: "linear-gradient(90deg, #a78bfa, #60a5fa, #34d399)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+            }}
+          >
+            ✨ Dashboard
           </div>
 
-          <SidebarButton label="Profile" active={tab === "profile"} onClick={() => setTab("profile")} />
-          <SidebarButton label="This Month" active={tab === "thisMonth"} onClick={() => setTab("thisMonth")} />
-          <SidebarButton label="Expenses" active={tab === "expenses"} onClick={() => setTab("expenses")} />
-          <SidebarButton label="Grocery" active={tab === "groceries"} onClick={() => setTab("groceries")} />
-          <SidebarButton label="Roommates" active={tab === "roommates"} onClick={() => setTab("roommates")} />
-          <SidebarButton label="Reminders" active={tab === "reminders"} onClick={() => setTab("reminders")} />
-          <SidebarButton label="Chat" active={tab === "chat"} onClick={() => setTab("chat")} />
+          <SidebarButton emoji="👤" label="Profile" active={tab === "profile"} onClick={() => setTab("profile")} />
+          <SidebarButton emoji="📅" label="This Month" active={tab === "thisMonth"} onClick={() => setTab("thisMonth")} />
+          <SidebarButton emoji="💸" label="Expenses" active={tab === "expenses"} onClick={() => setTab("expenses")} />
+          <SidebarButton emoji="🤝" label="Settlements" active={tab === "settlements"} onClick={() => setTab("settlements")} />
+          <SidebarButton emoji="📊" label="Analytics" active={tab === "analytics"} onClick={() => setTab("analytics")} />
+          <SidebarButton emoji="🧹" label="Chores" active={tab === "chores"} onClick={() => setTab("chores")} />
+          <SidebarButton emoji="🛒" label="Grocery" active={tab === "groceries"} onClick={() => setTab("groceries")} />
+          <SidebarButton emoji="🏠" label="Roommates" active={tab === "roommates"} onClick={() => setTab("roommates")} />
+          <SidebarButton emoji="⏰" label="Reminders" active={tab === "reminders"} onClick={() => setTab("reminders")} />
+          <SidebarButton emoji="💬" label="Chat" active={tab === "chat"} onClick={() => setTab("chat")} />
+          <SidebarButton emoji="🤖" label="AI Assistant" active={tab === "ai"} onClick={() => setTab("ai")} />
 
           <div
             style={{
               marginTop: 16,
-              borderTop: "1px solid #2b2b2b",
+              borderTop: "1px solid rgba(255,255,255,0.08)",
               paddingTop: 14,
               fontSize: 13,
-              opacity: 0.8,
+              opacity: 0.9,
             }}
           >
             <div><strong>Name:</strong> {myName || "Not set"}</div>
-            <div style={{ marginTop: 6 }}><strong>Role:</strong> {uid === createdBy ? "Admin" : "Member"}</div>
+            <div style={{ marginTop: 6 }}>
+              <strong>Role:</strong> {uid === createdBy ? "Admin" : "Member"}
+            </div>
           </div>
         </div>
 
         <div
           style={{
             flex: 1,
-            border: "1px solid #2b2b2b",
-            borderRadius: 16,
+            border: "1px solid rgba(255,255,255,0.08)",
+            borderRadius: 18,
             padding: 16,
-            background: "#111",
+            background: "rgba(17, 24, 39, 0.82)",
+            backdropFilter: "blur(10px)",
+            boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
             minHeight: "80vh",
           }}
         >
@@ -358,13 +385,16 @@ export default function DashboardPage() {
               onClick={() => setTab("notifications")}
               style={{
                 position: "relative",
-                border: tab === "notifications" ? "1px solid white" : "1px solid #2b2b2b",
-                borderRadius: 12,
+                border: tab === "notifications" ? "1px solid #f59e0b" : "1px solid rgba(255,255,255,0.08)",
+                borderRadius: 14,
                 padding: "10px 12px",
-                background: "#0b0b0b",
+                background: tab === "notifications"
+                  ? "linear-gradient(135deg, #f59e0b, #f97316)"
+                  : "#0b1220",
                 color: "white",
                 cursor: "pointer",
                 fontWeight: 800,
+                boxShadow: tab === "notifications" ? "0 8px 24px rgba(245,158,11,0.3)" : "none",
               }}
               title="Notifications"
             >
@@ -375,13 +405,13 @@ export default function DashboardPage() {
                     position: "absolute",
                     top: -6,
                     right: -6,
-                    background: "red",
+                    background: "#ef4444",
                     color: "white",
                     borderRadius: 999,
                     padding: "2px 7px",
                     fontSize: 12,
                     fontWeight: 900,
-                    border: "2px solid #0b0b0b",
+                    border: "2px solid #0b1020",
                   }}
                 >
                   {unreadNotifs > 99 ? "99+" : unreadNotifs}
@@ -394,32 +424,33 @@ export default function DashboardPage() {
             <div style={{ display: "grid", gap: 14 }}>
               <div
                 style={{
-                  border: "1px solid #333",
-                  borderRadius: 12,
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  borderRadius: 16,
                   padding: 16,
-                  background: "#0b0b0b",
+                  background: "linear-gradient(135deg, rgba(124,58,237,0.18), rgba(37,99,235,0.14))",
                 }}
               >
                 <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
                   <div
                     style={{
-                      width: 54,
-                      height: 54,
+                      width: 58,
+                      height: 58,
                       borderRadius: 999,
-                      border: "1px solid #2b2b2b",
-                      background: "#111",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      background: "linear-gradient(135deg, #7c3aed, #2563eb)",
                       display: "grid",
                       placeItems: "center",
                       fontWeight: 900,
-                      fontSize: 18,
+                      fontSize: 20,
+                      boxShadow: "0 8px 20px rgba(124,58,237,0.3)",
                     }}
                   >
                     {initials}
                   </div>
 
                   <div style={{ display: "grid", gap: 2 }}>
-                    <h2 style={{ margin: 0 }}>Profile</h2>
-                    <div style={{ fontSize: 13, opacity: 0.8 }}>Account details</div>
+                    <h2 style={{ margin: 0 }}>👤 Profile</h2>
+                    <div style={{ fontSize: 13, opacity: 0.85 }}>Account details</div>
                   </div>
                 </div>
 
@@ -436,13 +467,13 @@ export default function DashboardPage() {
 
               <div
                 style={{
-                  border: "1px solid #333",
-                  borderRadius: 12,
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  borderRadius: 16,
                   padding: 16,
-                  background: "#0b0b0b",
+                  background: "linear-gradient(135deg, rgba(16,185,129,0.15), rgba(59,130,246,0.12))",
                 }}
               >
-                <h3 style={{ marginTop: 0 }}>Room</h3>
+                <h3 style={{ marginTop: 0 }}>🏠 Room</h3>
                 <p><strong>Role:</strong> {uid === createdBy ? "Admin" : "Member"}</p>
                 <p><strong>Room ID:</strong> {groupId}</p>
               </div>
@@ -451,7 +482,7 @@ export default function DashboardPage() {
 
           {tab === "thisMonth" && (
             <div style={{ display: "grid", gap: 12 }}>
-              <h2 style={{ margin: 0 }}>This Month</h2>
+              <h2 style={{ margin: 0 }}>📅 This Month</h2>
 
               <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                 <div style={{ fontSize: 12, opacity: 0.75 }}>Month</div>
@@ -462,9 +493,9 @@ export default function DashboardPage() {
                     setSelectedMonth({ year: y, month: m });
                   }}
                   style={{
-                    background: "#0b0b0b",
+                    background: "#0b1220",
                     color: "white",
-                    border: "1px solid #2b2b2b",
+                    border: "1px solid rgba(255,255,255,0.08)",
                     borderRadius: 10,
                     padding: "8px 10px",
                   }}
@@ -478,16 +509,19 @@ export default function DashboardPage() {
               </div>
 
               <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-                <StatCard title="Total spent" value={`$${formatMoney(monthTotal)}`} />
-                <StatCard title="You paid" value={`$${formatMoney(youPaid)}`} />
-                <StatCard title="You owe" value={`$${formatMoney(youOwe)}`} />
-                <StatCard title="Net" value={`${net >= 0 ? "+" : "-"}$${formatMoney(Math.abs(net))}`} />
-                <StatCard title="Expenses count" value={`${monthCount}`} />
+                <StatCard title="💰 Total spent" value={`$${formatMoney(monthTotal)}`} />
+                <StatCard title="🧾 You paid" value={`$${formatMoney(youPaid)}`} />
+                <StatCard title="💸 You owe" value={`$${formatMoney(youOwe)}`} />
+                <StatCard title="📈 Net" value={`${net >= 0 ? "+" : "-"}$${formatMoney(Math.abs(net))}`} />
+                <StatCard title="📦 Expenses count" value={`${monthCount}`} />
               </div>
             </div>
           )}
 
           {tab === "expenses" && <ExpensesPanel />}
+          {tab === "settlements" && <SettlementsPanel />}
+          {tab === "analytics" && <AnalyticsPanel />}
+          {tab === "chores" && <ChoresPanel />}
           {tab === "groceries" && <GroceryPanel />}
 
           {tab === "roommates" && (
@@ -505,6 +539,7 @@ export default function DashboardPage() {
 
           {tab === "reminders" && <RemindersPanel groupId={groupId ?? ""} />}
           {tab === "chat" && <ChatPanel />}
+          {tab === "ai" && <AIAssistantPanel />}
           {tab === "notifications" && <NotificationsPanel />}
         </div>
       </div>
@@ -513,10 +548,12 @@ export default function DashboardPage() {
 }
 
 function SidebarButton({
+  emoji,
   label,
   active,
   onClick,
 }: {
+  emoji: string;
   label: string;
   active: boolean;
   onClick: () => void;
@@ -528,16 +565,23 @@ function SidebarButton({
         marginBottom: 10,
         width: "100%",
         textAlign: "left",
-        padding: "11px 12px",
-        borderRadius: 12,
-        border: active ? "1px solid white" : "1px solid #2b2b2b",
-        background: active ? "#1a1a1a" : "#0b0b0b",
+        padding: "12px 14px",
+        borderRadius: 14,
+        border: active ? "1px solid #7c3aed" : "1px solid rgba(255,255,255,0.08)",
+        background: active
+          ? "linear-gradient(135deg, #7c3aed, #2563eb)"
+          : "#0f172a",
         color: "white",
         fontWeight: active ? 900 : 700,
         cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        boxShadow: active ? "0 8px 24px rgba(124,58,237,0.35)" : "none",
       }}
     >
-      {label}
+      <span style={{ fontSize: 18 }}>{emoji}</span>
+      <span>{label}</span>
     </button>
   );
 }
@@ -546,37 +590,40 @@ function StatCard({ title, value }: { title: string; value: string }) {
   return (
     <div
       style={{
-        border: "1px solid #2b2b2b",
-        borderRadius: 12,
-        padding: "10px 12px",
-        background: "#0b0b0b",
-        minWidth: 160,
+        border: "1px solid rgba(255,255,255,0.08)",
+        borderRadius: 16,
+        padding: "14px 16px",
+        background: "linear-gradient(135deg, rgba(124,58,237,0.18), rgba(37,99,235,0.14))",
+        minWidth: 170,
+        boxShadow: "0 8px 24px rgba(0,0,0,0.22)",
       }}
     >
-      <div style={{ fontSize: 12, opacity: 0.75 }}>{title}</div>
-      <div style={{ fontSize: 18, fontWeight: 900 }}>{value}</div>
+      <div style={{ fontSize: 12, opacity: 0.8 }}>{title}</div>
+      <div style={{ fontSize: 24, fontWeight: 900, marginTop: 4 }}>{value}</div>
     </div>
   );
 }
 
-const actionBtnStyle: React.CSSProperties = {
-  border: "1px solid #2b2b2b",
-  borderRadius: 10,
+const actionBtnStyle: CSSProperties = {
+  border: "1px solid #2563eb",
+  borderRadius: 12,
   padding: "10px 12px",
-  background: "white",
-  color: "black",
+  background: "linear-gradient(135deg, #60a5fa, #2563eb)",
+  color: "white",
   fontWeight: 800,
   cursor: "pointer",
+  boxShadow: "0 8px 20px rgba(37,99,235,0.3)",
 };
 
-const dangerBtnStyle: React.CSSProperties = {
-  border: "1px solid #7f1d1d",
-  borderRadius: 10,
+const dangerBtnStyle: CSSProperties = {
+  border: "1px solid #dc2626",
+  borderRadius: 12,
   padding: "10px 12px",
-  background: "#2a0f0f",
-  color: "#fecaca",
+  background: "linear-gradient(135deg, #ef4444, #b91c1c)",
+  color: "white",
   fontWeight: 800,
   cursor: "pointer",
+  boxShadow: "0 8px 20px rgba(239,68,68,0.25)",
 };
 
 function monthLabel(year: number, month: number) {
