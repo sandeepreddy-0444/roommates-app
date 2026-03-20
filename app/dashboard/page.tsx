@@ -49,6 +49,28 @@ type Tab =
 type Roommate = { uid: string; name: string };
 type MonthKey = { year: number; month: number };
 
+type SidebarItem = {
+  id: Tab;
+  emoji: string;
+  label: string;
+};
+
+const defaultSidebarItems: SidebarItem[] = [
+  { id: "profile", emoji: "👤", label: "Profile" },
+  { id: "thisMonth", emoji: "📅", label: "This Month" },
+  { id: "expenses", emoji: "💸", label: "Expenses" },
+  { id: "settlements", emoji: "🤝", label: "Settlements" },
+  { id: "analytics", emoji: "📊", label: "Analytics" },
+  { id: "chores", emoji: "🧹", label: "Chores" },
+  { id: "groceries", emoji: "🛒", label: "Grocery" },
+  { id: "roommates", emoji: "🏠", label: "Roommates" },
+  { id: "reminders", emoji: "⏰", label: "Reminders" },
+  { id: "chat", emoji: "💬", label: "Chat" },
+  { id: "ai", emoji: "🤖", label: "AI Assistant" },
+];
+
+const SIDEBAR_ORDER_KEY = "dashboard.sidebarOrder.v1";
+
 export default function DashboardPage() {
   const router = useRouter();
 
@@ -63,6 +85,11 @@ export default function DashboardPage() {
   const [createdBy, setCreatedBy] = useState<string | null>(null);
 
   const [roommates, setRoommates] = useState<Roommate[]>([]);
+
+  const [sidebarItems, setSidebarItems] =
+    useState<SidebarItem[]>(defaultSidebarItems);
+  const [isReordering, setIsReordering] = useState(false);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
   const baseNow = useMemo(() => new Date(), []);
   const [selectedMonth, setSelectedMonth] = useState<MonthKey>({
@@ -100,6 +127,38 @@ export default function DashboardPage() {
     }
     return out;
   }, []);
+
+  useEffect(() => {
+    const saved =
+      typeof window !== "undefined"
+        ? window.localStorage.getItem(SIDEBAR_ORDER_KEY)
+        : null;
+
+    if (!saved) return;
+
+    try {
+      const savedIds = JSON.parse(saved) as Tab[];
+      const ordered = savedIds
+        .map((id) => defaultSidebarItems.find((item) => item.id === id))
+        .filter(Boolean) as SidebarItem[];
+
+      const missing = defaultSidebarItems.filter(
+        (item) => !savedIds.includes(item.id)
+      );
+
+      if (ordered.length > 0) {
+        setSidebarItems([...ordered, ...missing]);
+      }
+    } catch {
+      setSidebarItems(defaultSidebarItems);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const ids = sidebarItems.map((item) => item.id);
+    window.localStorage.setItem(SIDEBAR_ORDER_KEY, JSON.stringify(ids));
+  }, [sidebarItems]);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
@@ -240,6 +299,33 @@ export default function DashboardPage() {
     return () => unsub();
   }, [groupId, uid]);
 
+  const handleDragStart = (index: number) => {
+    if (!isReordering) return;
+    setDraggedIndex(index);
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLButtonElement>) => {
+    if (!isReordering) return;
+    e.preventDefault();
+  };
+
+  const handleDrop = (dropIndex: number) => {
+    if (!isReordering) return;
+    if (draggedIndex === null || draggedIndex === dropIndex) {
+      setDraggedIndex(null);
+      return;
+    }
+
+    setSidebarItems((prev) => {
+      const updated = [...prev];
+      const [movedItem] = updated.splice(draggedIndex, 1);
+      updated.splice(dropIndex, 0, movedItem);
+      return updated;
+    });
+
+    setDraggedIndex(null);
+  };
+
   const removeMember = async (memberUid: string) => {
     if (!groupId || !uid) return;
     if (uid !== createdBy) return alert("Only admin can remove members.");
@@ -302,14 +388,17 @@ export default function DashboardPage() {
     }
   };
 
-  if (loading) return <div style={{ padding: 16, color: "white" }}>Loading...</div>;
+  if (loading) {
+    return <div style={{ padding: 16, color: "white" }}>Loading...</div>;
+  }
 
   return (
     <div
       style={{
         minHeight: "100vh",
         padding: 16,
-        background: "linear-gradient(180deg, #0b1020 0%, #111827 45%, #0b0b0b 100%)",
+        background:
+          "linear-gradient(180deg, #0b1020 0%, #111827 45%, #0b0b0b 100%)",
         color: "white",
       }}
     >
@@ -329,28 +418,63 @@ export default function DashboardPage() {
         >
           <div
             style={{
-              fontSize: 24,
-              fontWeight: 900,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
               marginBottom: 14,
-              background: "linear-gradient(90deg, #a78bfa, #60a5fa, #34d399)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
             }}
           >
-            ✨ Dashboard
+            <div
+              style={{
+                fontSize: 24,
+                fontWeight: 900,
+                background:
+                  "linear-gradient(90deg, #a78bfa, #60a5fa, #34d399)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+              }}
+            >
+              ✨ Dashboard
+            </div>
+
+            <button
+              onClick={() => {
+                setIsReordering((prev) => !prev);
+                setDraggedIndex(null);
+              }}
+              style={{
+                border: "1px solid rgba(255,255,255,0.12)",
+                borderRadius: 10,
+                padding: "6px 8px",
+                background: isReordering ? "#10b981" : "#0f172a",
+                color: "white",
+                cursor: "pointer",
+                fontSize: 16,
+                lineHeight: 1,
+              }}
+              title={isReordering ? "Done" : "Reorder"}
+            >
+              {isReordering ? "✓" : "↕️"}
+            </button>
           </div>
 
-          <SidebarButton emoji="👤" label="Profile" active={tab === "profile"} onClick={() => setTab("profile")} />
-          <SidebarButton emoji="📅" label="This Month" active={tab === "thisMonth"} onClick={() => setTab("thisMonth")} />
-          <SidebarButton emoji="💸" label="Expenses" active={tab === "expenses"} onClick={() => setTab("expenses")} />
-          <SidebarButton emoji="🤝" label="Settlements" active={tab === "settlements"} onClick={() => setTab("settlements")} />
-          <SidebarButton emoji="📊" label="Analytics" active={tab === "analytics"} onClick={() => setTab("analytics")} />
-          <SidebarButton emoji="🧹" label="Chores" active={tab === "chores"} onClick={() => setTab("chores")} />
-          <SidebarButton emoji="🛒" label="Grocery" active={tab === "groceries"} onClick={() => setTab("groceries")} />
-          <SidebarButton emoji="🏠" label="Roommates" active={tab === "roommates"} onClick={() => setTab("roommates")} />
-          <SidebarButton emoji="⏰" label="Reminders" active={tab === "reminders"} onClick={() => setTab("reminders")} />
-          <SidebarButton emoji="💬" label="Chat" active={tab === "chat"} onClick={() => setTab("chat")} />
-          <SidebarButton emoji="🤖" label="AI Assistant" active={tab === "ai"} onClick={() => setTab("ai")} />
+          {sidebarItems.map((item, index) => (
+            <SidebarButton
+              key={item.id}
+              emoji={item.emoji}
+              label={item.label}
+              active={tab === item.id}
+              onClick={() => {
+                if (isReordering) return;
+                setTab(item.id);
+              }}
+              draggable={isReordering}
+              onDragStart={() => handleDragStart(index)}
+              onDragOver={handleDragOver}
+              onDrop={() => handleDrop(index)}
+              isReordering={isReordering}
+            />
+          ))}
 
           <div
             style={{
@@ -361,7 +485,9 @@ export default function DashboardPage() {
               opacity: 0.9,
             }}
           >
-            <div><strong>Name:</strong> {myName || "Not set"}</div>
+            <div>
+              <strong>Name:</strong> {myName || "Not set"}
+            </div>
             <div style={{ marginTop: 6 }}>
               <strong>Role:</strong> {uid === createdBy ? "Admin" : "Member"}
             </div>
@@ -380,21 +506,30 @@ export default function DashboardPage() {
             minHeight: "80vh",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+          <div
+            style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}
+          >
             <button
               onClick={() => setTab("notifications")}
               style={{
                 position: "relative",
-                border: tab === "notifications" ? "1px solid #f59e0b" : "1px solid rgba(255,255,255,0.08)",
+                border:
+                  tab === "notifications"
+                    ? "1px solid #f59e0b"
+                    : "1px solid rgba(255,255,255,0.08)",
                 borderRadius: 14,
                 padding: "10px 12px",
-                background: tab === "notifications"
-                  ? "linear-gradient(135deg, #f59e0b, #f97316)"
-                  : "#0b1220",
+                background:
+                  tab === "notifications"
+                    ? "linear-gradient(135deg, #f59e0b, #f97316)"
+                    : "#0b1220",
                 color: "white",
                 cursor: "pointer",
                 fontWeight: 800,
-                boxShadow: tab === "notifications" ? "0 8px 24px rgba(245,158,11,0.3)" : "none",
+                boxShadow:
+                  tab === "notifications"
+                    ? "0 8px 24px rgba(245,158,11,0.3)"
+                    : "none",
               }}
               title="Notifications"
             >
@@ -427,7 +562,8 @@ export default function DashboardPage() {
                   border: "1px solid rgba(255,255,255,0.08)",
                   borderRadius: 16,
                   padding: 16,
-                  background: "linear-gradient(135deg, rgba(124,58,237,0.18), rgba(37,99,235,0.14))",
+                  background:
+                    "linear-gradient(135deg, rgba(124,58,237,0.18), rgba(37,99,235,0.14))",
                 }}
               >
                 <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
@@ -450,18 +586,35 @@ export default function DashboardPage() {
 
                   <div style={{ display: "grid", gap: 2 }}>
                     <h2 style={{ margin: 0 }}>👤 Profile</h2>
-                    <div style={{ fontSize: 13, opacity: 0.85 }}>Account details</div>
+                    <div style={{ fontSize: 13, opacity: 0.85 }}>
+                      Account details
+                    </div>
                   </div>
                 </div>
 
                 <div style={{ marginTop: 12 }}>
-                  <p><strong>Name:</strong> {myName || "Not set"}</p>
-                  <p><strong>Email:</strong> {email}</p>
+                  <p>
+                    <strong>Name:</strong> {myName || "Not set"}
+                  </p>
+                  <p>
+                    <strong>Email:</strong> {email}
+                  </p>
                 </div>
 
-                <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <button onClick={changePassword} style={actionBtnStyle}>Change Password</button>
-                  <button onClick={logout} style={dangerBtnStyle}>Logout</button>
+                <div
+                  style={{
+                    marginTop: 12,
+                    display: "flex",
+                    gap: 10,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <button onClick={changePassword} style={actionBtnStyle}>
+                    Change Password
+                  </button>
+                  <button onClick={logout} style={dangerBtnStyle}>
+                    Logout
+                  </button>
                 </div>
               </div>
 
@@ -470,12 +623,17 @@ export default function DashboardPage() {
                   border: "1px solid rgba(255,255,255,0.08)",
                   borderRadius: 16,
                   padding: 16,
-                  background: "linear-gradient(135deg, rgba(16,185,129,0.15), rgba(59,130,246,0.12))",
+                  background:
+                    "linear-gradient(135deg, rgba(16,185,129,0.15), rgba(59,130,246,0.12))",
                 }}
               >
                 <h3 style={{ marginTop: 0 }}>🏠 Room</h3>
-                <p><strong>Role:</strong> {uid === createdBy ? "Admin" : "Member"}</p>
-                <p><strong>Room ID:</strong> {groupId}</p>
+                <p>
+                  <strong>Role:</strong> {uid === createdBy ? "Admin" : "Member"}
+                </p>
+                <p>
+                  <strong>Room ID:</strong> {groupId}
+                </p>
               </div>
             </div>
           )}
@@ -484,7 +642,14 @@ export default function DashboardPage() {
             <div style={{ display: "grid", gap: 12 }}>
               <h2 style={{ margin: 0 }}>📅 This Month</h2>
 
-              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 10,
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                }}
+              >
                 <div style={{ fontSize: 12, opacity: 0.75 }}>Month</div>
                 <select
                   value={`${selectedMonth.year}-${selectedMonth.month}`}
@@ -501,7 +666,10 @@ export default function DashboardPage() {
                   }}
                 >
                   {monthOptions.map((m) => (
-                    <option key={`${m.year}-${m.month}`} value={`${m.year}-${m.month}`}>
+                    <option
+                      key={`${m.year}-${m.month}`}
+                      value={`${m.year}-${m.month}`}
+                    >
                       {monthLabel(m.year, m.month)}
                     </option>
                   ))}
@@ -512,7 +680,10 @@ export default function DashboardPage() {
                 <StatCard title="💰 Total spent" value={`$${formatMoney(monthTotal)}`} />
                 <StatCard title="🧾 You paid" value={`$${formatMoney(youPaid)}`} />
                 <StatCard title="💸 You owe" value={`$${formatMoney(youOwe)}`} />
-                <StatCard title="📈 Net" value={`${net >= 0 ? "+" : "-"}$${formatMoney(Math.abs(net))}`} />
+                <StatCard
+                  title="📈 Net"
+                  value={`${net >= 0 ? "+" : "-"}$${formatMoney(Math.abs(net))}`}
+                />
                 <StatCard title="📦 Expenses count" value={`${monthCount}`} />
               </div>
             </div>
@@ -552,15 +723,29 @@ function SidebarButton({
   label,
   active,
   onClick,
+  draggable,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  isReordering,
 }: {
   emoji: string;
   label: string;
   active: boolean;
   onClick: () => void;
+  draggable?: boolean;
+  onDragStart?: () => void;
+  onDragOver?: (e: React.DragEvent<HTMLButtonElement>) => void;
+  onDrop?: () => void;
+  isReordering?: boolean;
 }) {
   return (
     <button
       onClick={onClick}
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
       style={{
         marginBottom: 10,
         width: "100%",
@@ -573,15 +758,17 @@ function SidebarButton({
           : "#0f172a",
         color: "white",
         fontWeight: active ? 900 : 700,
-        cursor: "pointer",
+        cursor: isReordering ? "grab" : "pointer",
         display: "flex",
         alignItems: "center",
         gap: 10,
         boxShadow: active ? "0 8px 24px rgba(124,58,237,0.35)" : "none",
+        opacity: isReordering ? 0.95 : 1,
       }}
     >
       <span style={{ fontSize: 18 }}>{emoji}</span>
-      <span>{label}</span>
+      <span style={{ flex: 1 }}>{label}</span>
+      {isReordering ? <span style={{ opacity: 0.7 }}>↕️</span> : null}
     </button>
   );
 }
@@ -593,7 +780,8 @@ function StatCard({ title, value }: { title: string; value: string }) {
         border: "1px solid rgba(255,255,255,0.08)",
         borderRadius: 16,
         padding: "14px 16px",
-        background: "linear-gradient(135deg, rgba(124,58,237,0.18), rgba(37,99,235,0.14))",
+        background:
+          "linear-gradient(135deg, rgba(124,58,237,0.18), rgba(37,99,235,0.14))",
         minWidth: 170,
         boxShadow: "0 8px 24px rgba(0,0,0,0.22)",
       }}
