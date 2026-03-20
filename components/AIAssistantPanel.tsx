@@ -46,6 +46,8 @@ export default function AIAssistantPanel() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
@@ -74,24 +76,35 @@ export default function AIAssistantPanel() {
   useEffect(() => {
     if (!groupId) return;
 
-    const unsub = onSnapshot(collection(db, "groups", groupId, "members"), async (snap) => {
-      const next: UserMap = {};
-      await Promise.all(
-        snap.docs.map(async (memberDoc) => {
-          const userSnap = await getDoc(doc(db, "users", memberDoc.id));
-          const data = userSnap.exists() ? (userSnap.data() as any) : {};
-          next[memberDoc.id] = data?.name || memberDoc.id.slice(0, 6);
-        })
-      );
-      setUsers(next);
-    });
+    const unsub = onSnapshot(
+      collection(db, "groups", groupId, "members"),
+      async (snap) => {
+        const next: UserMap = {};
+
+        await Promise.all(
+          snap.docs.map(async (memberDoc) => {
+            const userSnap = await getDoc(doc(db, "users", memberDoc.id));
+            const data = userSnap.exists() ? (userSnap.data() as any) : {};
+            next[memberDoc.id] = data?.name || memberDoc.id.slice(0, 6);
+          })
+        );
+
+        setUsers(next);
+      }
+    );
 
     return () => unsub();
   }, [groupId]);
 
   useEffect(() => {
     if (!groupId) return;
-    const q = query(collection(db, "groups", groupId, "expenses"), orderBy("createdAt", "desc"), limit(500));
+
+    const q = query(
+      collection(db, "groups", groupId, "expenses"),
+      orderBy("createdAt", "desc"),
+      limit(500)
+    );
+
     const unsub = onSnapshot(q, (snap) => {
       const rows: Expense[] = snap.docs.map((d) => {
         const data = d.data() as any;
@@ -102,11 +115,14 @@ export default function AIAssistantPanel() {
           paidByUid: data?.paidByUid || data?.createdByUid || "",
           createdByUid: data?.createdByUid || "",
           splitMap: data?.splitMap || {},
-          participants: Array.isArray(data?.participants) ? data.participants : [],
+          participants: Array.isArray(data?.participants)
+            ? data.participants
+            : [],
           date: data?.date || "",
           createdAt: data?.createdAt,
         };
       });
+
       setExpenses(rows);
     });
 
@@ -115,7 +131,13 @@ export default function AIAssistantPanel() {
 
   useEffect(() => {
     if (!groupId) return;
-    const q = query(collection(db, "groups", groupId, "reminders"), orderBy("dueDate", "asc"), limit(100));
+
+    const q = query(
+      collection(db, "groups", groupId, "reminders"),
+      orderBy("dueDate", "asc"),
+      limit(100)
+    );
+
     const unsub = onSnapshot(q, (snap) => {
       const rows: Reminder[] = snap.docs.map((d) => {
         const data = d.data() as any;
@@ -126,6 +148,7 @@ export default function AIAssistantPanel() {
           isActive: data?.isActive ?? true,
         };
       });
+
       setReminders(rows);
     });
 
@@ -138,7 +161,10 @@ export default function AIAssistantPanel() {
       return sum + (Number.isFinite(val) ? val : 0);
     }, 0);
 
-    const thisMonthExpenses = expenses.filter((e) => isThisMonth(e.date, e.createdAt));
+    const thisMonthExpenses = expenses.filter((e) =>
+      isThisMonth(e.date, e.createdAt)
+    );
+
     const myMonthExpenses = thisMonthExpenses.filter(
       (e) => (e.paidByUid || e.createdByUid) === uid
     );
@@ -157,87 +183,67 @@ export default function AIAssistantPanel() {
     };
   }, [expenses, uid]);
 
-  function answerQuestion(raw: string) {
-    const q = raw.toLowerCase().trim();
-
-    if (q.includes("how much do i owe") || q.includes("what do i owe")) {
-      return `You currently owe about $${computed.myOwe.toFixed(2)} based on the current split amounts.`;
-    }
-
-    if (q.includes("show my expenses this month") || q.includes("my expenses this month")) {
-      if (computed.myMonthExpenses.length === 0) {
-        return "You have no expenses paid by you this month.";
-      }
-
-      const lines = computed.myMonthExpenses
-        .slice(0, 8)
-        .map((e) => `• ${e.title} — $${Number(e.amount || 0).toFixed(2)}`);
-
-      return `Here are your expenses this month:\n${lines.join("\n")}`;
-    }
-
-    if (q.includes("who paid the most") || q.includes("highest spender")) {
-      const top = Object.entries(computed.spendByUser).sort((a, b) => b[1] - a[1])[0];
-      if (!top) return "No expense data yet.";
-      return `${users[top[0]] || "Someone"} paid the most: $${top[1].toFixed(2)}.`;
-    }
-
-    if (q.includes("who didn’t pay rent") || q.includes("who didn't pay rent")) {
-      const rentExpenses = expenses.filter((e) => (e.title || "").toLowerCase().includes("rent"));
-      if (rentExpenses.length === 0) {
-        return "I couldn’t find any rent expense records yet.";
-      }
-
-      const lastRent = rentExpenses[0];
-      const participants = new Set(Object.keys(lastRent.splitMap || {}));
-      const missing = Object.keys(users).filter((id) => !participants.has(id));
-
-      if (missing.length === 0) {
-        return "Everyone in the room appears in the latest rent split.";
-      }
-
-      return `These roommates are not in the latest rent split: ${missing.map((id) => users[id] || id).join(", ")}.`;
-    }
-
-    if (q.includes("reminder") || q.includes("coming up") || q.includes("upcoming")) {
-      const active = reminders.filter((r) => r.isActive).slice(0, 5);
-      if (active.length === 0) return "There are no active upcoming reminders.";
-
-      return `Upcoming reminders:\n${active
-        .map((r) => `• ${r.title} — ${r.dueDate}`)
-        .join("\n")}`;
-    }
-
-    if (q.includes("summary") || q.includes("room summary")) {
-      return `Room summary:
-• Total expenses: ${expenses.length}
-• This month expenses: ${computed.thisMonthExpenses.length}
-• Active reminders: ${reminders.filter((r) => r.isActive).length}
-• You owe about: $${computed.myOwe.toFixed(2)}`;
-    }
-
-    return `I can help with:
-• how much you owe
-• your expenses this month
-• who paid the most
-• latest rent split check
-• upcoming reminders
-
-Try asking one of those.`;
-  }
-
-  function send() {
+  async function send() {
     const text = input.trim();
-    if (!text) return;
+    if (!text || loading) return;
 
-    const reply = answerQuestion(text);
-
-    setMessages((prev) => [
-      ...prev,
-      { role: "user", text },
-      { role: "assistant", text: reply },
-    ]);
+    const userMessage: Message = { role: "user", text };
+    setMessages((prev) => [...prev, userMessage]);
     setInput("");
+    setLoading(true);
+
+    try {
+      const res = await fetch("/api/ai", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: text,
+          context: {
+            currentUserUid: uid,
+            currentUserName: uid ? users[uid] || uid : null,
+            groupId,
+            users,
+            expenses,
+            reminders,
+            summary: {
+              myOwe: computed.myOwe,
+              totalExpenses: expenses.length,
+              thisMonthExpensesCount: computed.thisMonthExpenses.length,
+              myMonthExpensesCount: computed.myMonthExpenses.length,
+              activeReminders: reminders.filter((r) => r.isActive).length,
+              spendByUser: computed.spendByUser,
+            },
+          },
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data?.error || "Failed to get AI response");
+      }
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          text: data?.reply || "I could not generate a reply.",
+        },
+      ]);
+    } catch (error) {
+      console.error("AI send error:", error);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          text: "Something went wrong while contacting AI. Please try again.",
+        },
+      ]);
+    } finally {
+      setLoading(false);
+    }
   }
 
   if (!groupId) return <div>You are not in a room yet.</div>;
@@ -277,6 +283,24 @@ Try asking one of those.`;
             <div>{m.text}</div>
           </div>
         ))}
+
+        {loading && (
+          <div
+            style={{
+              alignSelf: "start",
+              maxWidth: "80%",
+              border: "1px solid #2b2b2b",
+              borderRadius: 12,
+              padding: 12,
+              background: "#111",
+            }}
+          >
+            <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>
+              Assistant
+            </div>
+            <div>Thinking...</div>
+          </div>
+        )}
       </div>
 
       <div
@@ -310,8 +334,8 @@ Try asking one of those.`;
           }}
         />
 
-        <button onClick={send} style={buttonStyle}>
-          Ask AI
+        <button onClick={send} style={buttonStyle} disabled={loading}>
+          {loading ? "Thinking..." : "Ask AI"}
         </button>
       </div>
     </div>
@@ -330,7 +354,10 @@ function isThisMonth(dateString?: string, createdAt?: any) {
   if (!d) return false;
 
   const now = new Date();
-  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  return (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth()
+  );
 }
 
 const buttonStyle: React.CSSProperties = {
