@@ -40,6 +40,10 @@ function formatMoney(n: number) {
   return v.toFixed(2);
 }
 
+function round2(n: number) {
+  return Math.round((Number(n) || 0) * 100) / 100;
+}
+
 function toDisplayDate(value: any): string {
   if (!value) return "";
   if (typeof value === "string") return value;
@@ -54,7 +58,6 @@ export default function ExpensesPanel() {
   const [isAdmin, setIsAdmin] = useState(false);
 
   const [roommates, setRoommates] = useState<Roommate[]>([]);
-
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -66,10 +69,27 @@ export default function ExpensesPanel() {
 
   const [selectedParticipants, setSelectedParticipants] = useState<Record<string, boolean>>({});
 
-  const selectedCount = useMemo(
-    () => Object.values(selectedParticipants).filter(Boolean).length,
-    [selectedParticipants]
+  const selectedRoommates = useMemo(
+    () => roommates.filter((r) => selectedParticipants[r.uid]),
+    [roommates, selectedParticipants]
   );
+
+  const selectedCount = selectedRoommates.length;
+  const enteredAmount = Number(amount);
+
+  const previewShare =
+    selectedCount > 0 && Number.isFinite(enteredAmount) && enteredAmount > 0
+      ? round2(enteredAmount / selectedCount)
+      : 0;
+
+  const previewYouReceive =
+    uid &&
+    selectedCount > 0 &&
+    Number.isFinite(enteredAmount) &&
+    enteredAmount > 0 &&
+    selectedParticipants[uid]
+      ? round2(enteredAmount - previewShare)
+      : 0;
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
@@ -116,9 +136,7 @@ export default function ExpensesPanel() {
       async (snap) => {
         const ids = snap.docs.map((d) => d.id);
 
-        const userDocs = await Promise.all(
-          ids.map((id) => getDoc(doc(db, "users", id)))
-        );
+        const userDocs = await Promise.all(ids.map((id) => getDoc(doc(db, "users", id))));
 
         const list: Roommate[] = userDocs.map((docSnap, i) => {
           const id = ids[i];
@@ -208,9 +226,7 @@ export default function ExpensesPanel() {
     if (!uid || !groupId) return setErr("Not ready (missing user or room).");
     if (!expenseDate) return setErr("Expense date is required.");
 
-    const participants = roommates
-      .filter((r) => selectedParticipants[r.uid])
-      .map((r) => r.uid);
+    const participants = roommates.filter((r) => selectedParticipants[r.uid]).map((r) => r.uid);
 
     if (participants.length === 0) {
       return setErr("Select at least one roommate to split the expense.");
@@ -256,6 +272,40 @@ export default function ExpensesPanel() {
     } finally {
       setAdding(false);
     }
+  }
+
+  function getName(userId?: string | null) {
+    if (!userId) return "Unknown";
+    const found = roommates.find((r) => r.uid === userId);
+    return found?.name || (userId === uid ? "You" : userId.slice(0, 6));
+  }
+
+  function getExpenseBreakdown(exp: Expense) {
+    const splitMap = exp.splitMap || {};
+    const participantIds =
+      exp.participants && exp.participants.length > 0
+        ? exp.participants
+        : Object.keys(splitMap);
+
+    const payer = exp.paidByUid || exp.createdByUid || null;
+
+    const perPerson =
+      participantIds.length > 0
+        ? round2(exp.amount / participantIds.length)
+        : 0;
+
+    const youShare = uid ? Number(splitMap[uid] || 0) : 0;
+    const youPaid = uid && payer === uid ? Number(exp.amount || 0) : 0;
+    const youNet = round2(youPaid - youShare);
+
+    return {
+      participantIds,
+      payer,
+      perPerson,
+      youShare,
+      youPaid,
+      youNet,
+    };
   }
 
   if (loading) return <div style={{ padding: 8 }}>Loading expenses...</div>;
@@ -320,7 +370,14 @@ export default function ExpensesPanel() {
             background: "#0b0b0b",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: 10,
+              flexWrap: "wrap",
+            }}
+          >
             <div style={{ fontWeight: 800 }}>Split with roommates</div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button type="button" onClick={selectAllParticipants} style={miniBtnStyle}>
@@ -361,9 +418,40 @@ export default function ExpensesPanel() {
 
           <div style={{ marginTop: 10, fontSize: 13, opacity: 0.8 }}>
             {selectedCount > 0 && amount && Number(amount) > 0
-              ? `Each selected roommate owes about $${formatMoney(Number(amount) / selectedCount)}`
+              ? `Each selected roommate owes about $${formatMoney(
+                  Number(amount) / selectedCount
+                )}`
               : "Select roommates to split this expense equally."}
           </div>
+
+          {selectedCount > 0 && Number.isFinite(enteredAmount) && enteredAmount > 0 && (
+            <div
+              style={{
+                marginTop: 12,
+                border: "1px solid #222",
+                borderRadius: 10,
+                padding: 12,
+                background: "#101010",
+                display: "grid",
+                gap: 6,
+                fontSize: 13,
+              }}
+            >
+              <div style={{ fontWeight: 800 }}>Preview</div>
+              <div>Total expense: ${formatMoney(enteredAmount)}</div>
+              <div>Split among: {selectedCount} member(s)</div>
+              <div>Each share: ${formatMoney(previewShare)}</div>
+              {uid && selectedParticipants[uid] ? (
+                <div style={{ fontWeight: 700 }}>
+                  If you paid, you should receive: ${formatMoney(previewYouReceive)}
+                </div>
+              ) : (
+                <div style={{ opacity: 0.8 }}>
+                  You are not included in this split right now.
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {err && <div style={{ color: "#fca5a5", fontSize: 13 }}>{err}</div>}
@@ -400,62 +488,117 @@ export default function ExpensesPanel() {
           <div style={{ opacity: 0.8 }}>No expenses yet.</div>
         ) : (
           <div style={{ display: "grid", gap: 10 }}>
-            {expenses.map((exp) => (
-              <div
-                key={exp.id}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  gap: 12,
-                  border: "1px solid #2b2b2b",
-                  borderRadius: 12,
-                  padding: 12,
-                  background: "#0b0b0b",
-                }}
-              >
-                <div style={{ display: "grid", gap: 4 }}>
-                  <div style={{ fontWeight: 900 }}>{exp.title}</div>
+            {expenses.map((exp) => {
+              const breakdown = getExpenseBreakdown(exp);
 
-                  <div style={{ fontSize: 13, opacity: 0.75 }}>
-                    {toDisplayDate(exp.date || exp.createdAt)}
-                  </div>
+              return (
+                <div
+                  key={exp.id}
+                  style={{
+                    border: "1px solid #2b2b2b",
+                    borderRadius: 12,
+                    padding: 12,
+                    background: "#0b0b0b",
+                    display: "grid",
+                    gap: 10,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "flex-start",
+                      gap: 12,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <div style={{ display: "grid", gap: 4 }}>
+                      <div style={{ fontWeight: 900 }}>{exp.title}</div>
 
-                  {exp.participants && exp.participants.length > 0 ? (
-                    <div style={{ fontSize: 12, opacity: 0.7 }}>
-                      Split with {exp.participants.length} roommate(s)
+                      <div style={{ fontSize: 13, opacity: 0.75 }}>
+                        {toDisplayDate(exp.date || exp.createdAt)}
+                      </div>
+
+                      <div style={{ fontSize: 12, opacity: 0.7 }}>
+                        Paid by: {getName(breakdown.payer)}
+                      </div>
+
+                      {breakdown.participantIds.length > 0 ? (
+                        <div style={{ fontSize: 12, opacity: 0.7 }}>
+                          Split with {breakdown.participantIds.length} roommate(s)
+                        </div>
+                      ) : null}
                     </div>
-                  ) : null}
-                </div>
 
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div style={{ fontWeight: 900 }}>
-                    ${formatMoney(Number(exp.amount) || 0)}
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ fontWeight: 900 }}>
+                        ${formatMoney(Number(exp.amount) || 0)}
+                      </div>
+
+                      {uid && (
+                        <ExpenseActions
+                          groupId={groupId}
+                          expense={{
+                            id: exp.id,
+                            title: exp.title,
+                            amount: Number(exp.amount) || 0,
+                            date: exp.date || exp.createdAt,
+                            createdBy:
+                              exp.createdBy ||
+                              exp.createdByUid ||
+                              exp.paidByUid ||
+                              exp.paidBy ||
+                              "",
+                          }}
+                          myUid={uid}
+                          isAdmin={isAdmin}
+                          onDone={() => {}}
+                        />
+                      )}
+                    </div>
                   </div>
 
-                  {uid && (
-                    <ExpenseActions
-                      groupId={groupId}
-                      expense={{
-                        id: exp.id,
-                        title: exp.title,
-                        amount: Number(exp.amount) || 0,
-                        date: exp.date || exp.createdAt,
-                        createdBy:
-                          exp.createdBy ||
-                          exp.createdByUid ||
-                          exp.paidByUid ||
-                          exp.paidBy ||
-                          "",
-                      }}
-                      myUid={uid}
-                      isAdmin={isAdmin}
-                      onDone={() => {}}
-                    />
-                  )}
+                  <div
+                    style={{
+                      border: "1px solid #222",
+                      borderRadius: 10,
+                      padding: 10,
+                      background: "#111",
+                      display: "grid",
+                      gap: 6,
+                      fontSize: 13,
+                    }}
+                  >
+                    <div style={{ fontWeight: 800 }}>Expense breakdown</div>
+                    <div>Total: ${formatMoney(exp.amount)}</div>
+                    <div>Each share: ${formatMoney(breakdown.perPerson)}</div>
+
+                    {uid && (
+                      <>
+                        <div>Your share: ${formatMoney(breakdown.youShare)}</div>
+                        {breakdown.youNet > 0 ? (
+                          <div style={{ fontWeight: 800 }}>
+                            You should receive: ${formatMoney(breakdown.youNet)}
+                          </div>
+                        ) : breakdown.youNet < 0 ? (
+                          <div style={{ fontWeight: 800 }}>
+                            You owe: ${formatMoney(Math.abs(breakdown.youNet))}
+                          </div>
+                        ) : (
+                          <div style={{ fontWeight: 800 }}>You are settled for this expense</div>
+                        )}
+                      </>
+                    )}
+
+                    {Object.entries(exp.splitMap || {}).map(([personUid, owed]) => (
+                      <div key={personUid} style={{ opacity: 0.9 }}>
+                        {getName(personUid)} share: ${formatMoney(Number(owed || 0))}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

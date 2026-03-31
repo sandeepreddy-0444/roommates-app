@@ -161,7 +161,9 @@ export default function SettlementsPanel() {
       await addDoc(collection(db, "groups", groupId, "notifications"), {
         type: "settlement",
         title: "Settlement suggestion created",
-        body: `${users[s.from] || "Someone"} should pay $${round2(s.amount).toFixed(2)} to ${users[s.to] || "someone"}`,
+        body: `${users[s.from] || "Someone"} should pay $${round2(s.amount).toFixed(
+          2
+        )} to ${users[s.to] || "someone"}`,
         createdAt: serverTimestamp(),
         createdBy: uid,
         readBy: [],
@@ -173,6 +175,28 @@ export default function SettlementsPanel() {
     }
   }
 
+  function getExpenseDetails(exp: Expense) {
+    const payer = exp.paidByUid || exp.createdByUid || null;
+    const splitMap = exp.splitMap || {};
+    const people = exp.participants && exp.participants.length > 0
+      ? exp.participants
+      : Object.keys(splitMap);
+
+    const perPerson = people.length > 0 ? round2(exp.amount / people.length) : 0;
+    const myShare = uid ? Number(splitMap[uid] || 0) : 0;
+    const myPaid = uid && payer === uid ? Number(exp.amount || 0) : 0;
+    const myNet = round2(myPaid - myShare);
+
+    return {
+      payer,
+      perPerson,
+      myShare,
+      myPaid,
+      myNet,
+      people,
+    };
+  }
+
   if (loading) return <div>Loading settlements...</div>;
   if (!groupId) return <div>You are not in a room yet.</div>;
 
@@ -182,6 +206,10 @@ export default function SettlementsPanel() {
 
       <div style={cardStyle}>
         <div style={{ fontWeight: 900, marginBottom: 10 }}>Current balances</div>
+        <div style={{ fontSize: 12, opacity: 0.75, marginBottom: 10 }}>
+          These are total balances across all unsettled expenses in the room.
+        </div>
+
         <div style={{ display: "grid", gap: 10 }}>
           {Object.keys(users).length === 0 ? (
             <div style={{ opacity: 0.7 }}>No roommates found.</div>
@@ -190,7 +218,10 @@ export default function SettlementsPanel() {
               const value = balances[personUid] || 0;
               return (
                 <div key={personUid} style={rowStyle}>
-                  <div>{name}{uid === personUid ? " (You)" : ""}</div>
+                  <div>
+                    {name}
+                    {uid === personUid ? " (You)" : ""}
+                  </div>
                   <div style={{ fontWeight: 900 }}>
                     {value >= 0 ? "+" : "-"}${Math.abs(round2(value)).toFixed(2)}
                   </div>
@@ -213,7 +244,8 @@ export default function SettlementsPanel() {
                 <div key={index} style={rowStyle}>
                   <div>
                     <strong>{users[s.from] || "Someone"}</strong> pays{" "}
-                    <strong>{users[s.to] || "Someone"}</strong> ${round2(s.amount).toFixed(2)}
+                    <strong>{users[s.to] || "Someone"}</strong> $
+                    {round2(s.amount).toFixed(2)}
                   </div>
                   <button
                     onClick={() => saveSuggestion(s)}
@@ -237,23 +269,84 @@ export default function SettlementsPanel() {
           <div style={{ display: "grid", gap: 10 }}>
             {expenses
               .filter((e) => !e.settled)
-              .map((e) => (
-                <div key={e.id} style={rowStyle}>
-                  <div>
-                    <div style={{ fontWeight: 800 }}>{e.title}</div>
-                    <div style={{ fontSize: 13, opacity: 0.75 }}>
-                      ${Number(e.amount || 0).toFixed(2)}
+              .map((e) => {
+                const details = getExpenseDetails(e);
+
+                return (
+                  <div
+                    key={e.id}
+                    style={{
+                      border: "1px solid #2b2b2b",
+                      borderRadius: 12,
+                      padding: 12,
+                      background: "#111",
+                      display: "grid",
+                      gap: 10,
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "flex-start",
+                        gap: 12,
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontWeight: 800 }}>{e.title}</div>
+                        <div style={{ fontSize: 13, opacity: 0.75 }}>
+                          Total: ${Number(e.amount || 0).toFixed(2)}
+                        </div>
+                        <div style={{ fontSize: 13, opacity: 0.75 }}>
+                          Each share: ${details.perPerson.toFixed(2)}
+                        </div>
+                        <div style={{ fontSize: 13, opacity: 0.75 }}>
+                          Paid by: {users[details.payer || ""] || "Unknown"}
+                          {details.payer === uid ? " (You)" : ""}
+                        </div>
+                        {uid && (
+                          <div style={{ fontSize: 13, fontWeight: 800, marginTop: 4 }}>
+                            {details.myNet > 0
+                              ? `You should receive $${details.myNet.toFixed(2)}`
+                              : details.myNet < 0
+                              ? `You owe $${Math.abs(details.myNet).toFixed(2)}`
+                              : "You are settled for this expense"}
+                          </div>
+                        )}
+                      </div>
+
+                      <button
+                        onClick={() => markExpenseSettled(e.id)}
+                        disabled={savingId === e.id}
+                        style={buttonStyle}
+                      >
+                        {savingId === e.id ? "Saving..." : "Mark Settled"}
+                      </button>
+                    </div>
+
+                    <div
+                      style={{
+                        border: "1px solid #2b2b2b",
+                        borderRadius: 10,
+                        padding: 10,
+                        background: "#0b0b0b",
+                        display: "grid",
+                        gap: 6,
+                        fontSize: 13,
+                      }}
+                    >
+                      <div style={{ fontWeight: 800 }}>Split details</div>
+                      {Object.entries(e.splitMap || {}).map(([personUid, owed]) => (
+                        <div key={personUid}>
+                          {users[personUid] || "Someone"}
+                          {personUid === uid ? " (You)" : ""}: ${round2(Number(owed || 0)).toFixed(2)}
+                        </div>
+                      ))}
                     </div>
                   </div>
-                  <button
-                    onClick={() => markExpenseSettled(e.id)}
-                    disabled={savingId === e.id}
-                    style={buttonStyle}
-                  >
-                    {savingId === e.id ? "Saving..." : "Mark Settled"}
-                  </button>
-                </div>
-              ))}
+                );
+              })}
           </div>
         )}
       </div>
