@@ -389,52 +389,20 @@ export default function DashboardPage() {
   };
 
   if (loading) {
-    return <div style={{ padding: 16, color: "white" }}>Loading...</div>;
+    return <div style={{ padding: 24, color: "white" }}>Loading your data...</div>;
   }
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        padding: 16,
-        background:
-          "linear-gradient(180deg, #0b1020 0%, #111827 45%, #0b0b0b 100%)",
-        color: "white",
-      }}
-    >
-      <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
-        <div
-          style={{
-            width: 260,
-            border: "1px solid rgba(255,255,255,0.08)",
-            borderRadius: 18,
-            padding: 14,
-            background: "rgba(17, 24, 39, 0.88)",
-            backdropFilter: "blur(10px)",
-            boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
-            position: "sticky",
-            top: 16,
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: 14,
-            }}
-          >
-            <div
-              style={{
-                fontSize: 24,
-                fontWeight: 900,
-                background:
-                  "linear-gradient(90deg, #a78bfa, #60a5fa, #34d399)",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-              }}
-            >
-              ✨ Dashboard
+    <div style={pageStyle}>
+      <div style={auroraOne} />
+      <div style={auroraTwo} />
+
+      <div style={shellStyle}>
+        <aside style={sidebarStyle}>
+          <div style={sidebarTopStyle}>
+            <div>
+              <div style={brandEyebrowStyle}>Roommates</div>
+              <div style={brandTitleStyle}>Dashboard</div>
             </div>
 
             <button
@@ -443,276 +411,189 @@ export default function DashboardPage() {
                 setDraggedIndex(null);
               }}
               style={{
-                border: "1px solid rgba(255,255,255,0.12)",
-                borderRadius: 10,
-                padding: "6px 8px",
-                background: isReordering ? "#10b981" : "#0f172a",
-                color: "white",
-                cursor: "pointer",
-                fontSize: 16,
-                lineHeight: 1,
+                ...iconActionStyle,
+                background: isReordering
+                  ? "linear-gradient(135deg, rgba(34,197,94,0.9), rgba(16,185,129,0.9))"
+                  : "rgba(15,23,42,0.88)",
               }}
-              title={isReordering ? "Done" : "Reorder"}
+              title={isReordering ? "Done reordering" : "Reorder sidebar"}
             >
-              {isReordering ? "✓" : "↕️"}
+              {isReordering ? "✓" : "↕"}
             </button>
           </div>
 
-          {sidebarItems.map((item, index) => (
-            <SidebarButton
-              key={item.id}
-              emoji={item.emoji}
-              label={item.label}
-              active={tab === item.id}
-              onClick={() => {
-                if (isReordering) return;
-                setTab(item.id);
-              }}
-              draggable={isReordering}
-              onDragStart={() => handleDragStart(index)}
-              onDragOver={handleDragOver}
-              onDrop={() => handleDrop(index)}
-              isReordering={isReordering}
-            />
-          ))}
+          <div style={{ display: "grid", gap: 10 }}>
+            {sidebarItems.map((item, index) => (
+              <SidebarButton
+                key={item.id}
+                emoji={item.emoji}
+                label={item.label}
+                active={tab === item.id}
+                onClick={() => {
+                  if (isReordering) return;
+                  setTab(item.id);
+                }}
+                draggable={isReordering}
+                onDragStart={() => handleDragStart(index)}
+                onDragOver={handleDragOver}
+                onDrop={() => handleDrop(index)}
+                isReordering={isReordering}
+              />
+            ))}
+          </div>
 
-          <div
-            style={{
-              marginTop: 16,
-              borderTop: "1px solid rgba(255,255,255,0.08)",
-              paddingTop: 14,
-              fontSize: 13,
-              opacity: 0.9,
-            }}
-          >
-            <div>
-              <strong>Name:</strong> {myName || "Not set"}
-            </div>
-            <div style={{ marginTop: 6 }}>
-              <strong>Role:</strong> {uid === createdBy ? "Admin" : "Member"}
+          <div style={sidebarFooterStyle}>
+            <div style={miniProfileStyle}>
+              <div style={miniAvatarStyle}>{initials}</div>
+              <div style={{ minWidth: 0 }}>
+                <div style={miniNameStyle}>{myName || "Not set"}</div>
+                <div style={miniRoleStyle}>
+                  {uid === createdBy ? "Admin" : "Member"}
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+        </aside>
 
-        <div
-          style={{
-            flex: 1,
-            border: "1px solid rgba(255,255,255,0.08)",
-            borderRadius: 18,
-            padding: 16,
-            background: "rgba(17, 24, 39, 0.82)",
-            backdropFilter: "blur(10px)",
-            boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
-            minHeight: "80vh",
-          }}
-        >
-          <div
-            style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}
-          >
+        <main style={mainPanelStyle}>
+          <div style={topBarStyle}>
+            <div>
+              <div style={topBarEyebrowStyle}>Shared home management</div>
+              <h1 style={topBarTitleStyle}>{getTabTitle(tab)}</h1>
+            </div>
+
             <button
               onClick={() => setTab("notifications")}
               style={{
-                position: "relative",
-                border:
-                  tab === "notifications"
-                    ? "1px solid #f59e0b"
-                    : "1px solid rgba(255,255,255,0.08)",
-                borderRadius: 14,
-                padding: "10px 12px",
-                background:
-                  tab === "notifications"
-                    ? "linear-gradient(135deg, #f59e0b, #f97316)"
-                    : "#0b1220",
-                color: "white",
-                cursor: "pointer",
-                fontWeight: 800,
-                boxShadow:
-                  tab === "notifications"
-                    ? "0 8px 24px rgba(245,158,11,0.3)"
-                    : "none",
+                ...notificationBtnStyle,
+                ...(tab === "notifications" ? notificationBtnActiveStyle : {}),
               }}
               title="Notifications"
             >
-              🔔
+              <span style={{ fontSize: 18 }}>🔔</span>
               {unreadNotifs > 0 ? (
-                <span
-                  style={{
-                    position: "absolute",
-                    top: -6,
-                    right: -6,
-                    background: "#ef4444",
-                    color: "white",
-                    borderRadius: 999,
-                    padding: "2px 7px",
-                    fontSize: 12,
-                    fontWeight: 900,
-                    border: "2px solid #0b1020",
-                  }}
-                >
+                <span style={notificationBadgeStyle}>
                   {unreadNotifs > 99 ? "99+" : unreadNotifs}
                 </span>
               ) : null}
             </button>
           </div>
 
-          {tab === "profile" && (
-            <div style={{ display: "grid", gap: 14 }}>
-              <div
-                style={{
-                  border: "1px solid rgba(255,255,255,0.08)",
-                  borderRadius: 16,
-                  padding: 16,
-                  background:
-                    "linear-gradient(135deg, rgba(124,58,237,0.18), rgba(37,99,235,0.14))",
-                }}
-              >
-                <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-                  <div
-                    style={{
-                      width: 58,
-                      height: 58,
-                      borderRadius: 999,
-                      border: "1px solid rgba(255,255,255,0.08)",
-                      background: "linear-gradient(135deg, #7c3aed, #2563eb)",
-                      display: "grid",
-                      placeItems: "center",
-                      fontWeight: 900,
-                      fontSize: 20,
-                      boxShadow: "0 8px 20px rgba(124,58,237,0.3)",
-                    }}
-                  >
-                    {initials}
-                  </div>
+          <div style={contentAreaStyle}>
+            {tab === "profile" && (
+              <div style={{ display: "grid", gap: 18 }}>
+                <section style={heroCardStyle}>
+                  <div style={heroHeaderStyle}>
+                    <div style={heroAvatarStyle}>{initials}</div>
 
-                  <div style={{ display: "grid", gap: 2 }}>
-                    <h2 style={{ margin: 0 }}>👤 Profile</h2>
-                    <div style={{ fontSize: 13, opacity: 0.85 }}>
-                      Account details
+                    <div style={{ display: "grid", gap: 4 }}>
+                      <div style={heroTitleStyle}>Profile</div>
+                      <div style={heroSubtitleStyle}>Account details</div>
                     </div>
                   </div>
+
+                  <div style={profileGridStyle}>
+                    <InfoPill label="Name" value={myName || "Not set"} />
+                    <InfoPill label="Email" value={email || "No email"} />
+                    <InfoPill
+                      label="Role"
+                      value={uid === createdBy ? "Admin" : "Member"}
+                    />
+                    <InfoPill label="Room ID" value={groupId || "Not available"} />
+                  </div>
+
+                  <div style={actionRowStyle}>
+                    <button onClick={changePassword} style={primaryBtnStyle}>
+                      Change Password
+                    </button>
+                    <button onClick={logout} style={dangerBtnStyle}>
+                      Logout
+                    </button>
+                  </div>
+                </section>
+
+                <section style={sectionCardStyle}>
+                  <div style={sectionTitleStyle}>Room access</div>
+                  <div style={sectionSubtleStyle}>
+                    You are currently connected to your shared room and can manage
+                    expenses, reminders, chores, messages, and roommate settings.
+                  </div>
+                </section>
+              </div>
+            )}
+
+            {tab === "thisMonth" && (
+              <div style={{ display: "grid", gap: 18 }}>
+                <section style={sectionCardStyle}>
+                  <div style={sectionHeaderRowStyle}>
+                    <div>
+                      <div style={sectionTitleStyle}>Monthly overview</div>
+                      <div style={sectionSubtleStyle}>
+                        Quick snapshot of your selected month.
+                      </div>
+                    </div>
+
+                    <div style={{ display: "grid", gap: 6 }}>
+                      <div style={inputLabelStyle}>Month</div>
+                      <select
+                        value={`${selectedMonth.year}-${selectedMonth.month}`}
+                        onChange={(e) => {
+                          const [y, m] = e.target.value.split("-").map(Number);
+                          setSelectedMonth({ year: y, month: m });
+                        }}
+                        style={modernSelectStyle}
+                      >
+                        {monthOptions.map((m) => (
+                          <option
+                            key={`${m.year}-${m.month}`}
+                            value={`${m.year}-${m.month}`}
+                          >
+                            {monthLabel(m.year, m.month)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </section>
+
+                <div style={statsGridStyle}>
+                  <StatCard title="Total spent" value={`$${formatMoney(monthTotal)}`} />
+                  <StatCard title="You paid" value={`$${formatMoney(youPaid)}`} />
+                  <StatCard title="You owe" value={`$${formatMoney(youOwe)}`} />
+                  <StatCard
+                    title="Net"
+                    value={`${net >= 0 ? "+" : "-"}$${formatMoney(Math.abs(net))}`}
+                  />
+                  <StatCard title="Expenses count" value={`${monthCount}`} />
                 </div>
-
-                <div style={{ marginTop: 12 }}>
-                  <p>
-                    <strong>Name:</strong> {myName || "Not set"}
-                  </p>
-                  <p>
-                    <strong>Email:</strong> {email}
-                  </p>
-                </div>
-
-                <div
-                  style={{
-                    marginTop: 12,
-                    display: "flex",
-                    gap: 10,
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <button onClick={changePassword} style={actionBtnStyle}>
-                    Change Password
-                  </button>
-                  <button onClick={logout} style={dangerBtnStyle}>
-                    Logout
-                  </button>
-                </div>
               </div>
+            )}
 
-              <div
-                style={{
-                  border: "1px solid rgba(255,255,255,0.08)",
-                  borderRadius: 16,
-                  padding: 16,
-                  background:
-                    "linear-gradient(135deg, rgba(16,185,129,0.15), rgba(59,130,246,0.12))",
-                }}
-              >
-                <h3 style={{ marginTop: 0 }}>🏠 Room</h3>
-                <p>
-                  <strong>Role:</strong> {uid === createdBy ? "Admin" : "Member"}
-                </p>
-                <p>
-                  <strong>Room ID:</strong> {groupId}
-                </p>
-              </div>
-            </div>
-          )}
+            {tab === "expenses" && <ExpensesPanel />}
+            {tab === "settlements" && <SettlementsPanel />}
+            {tab === "analytics" && <AnalyticsPanel />}
+            {tab === "chores" && <ChoresPanel />}
+            {tab === "groceries" && <GroceryPanel />}
 
-          {tab === "thisMonth" && (
-            <div style={{ display: "grid", gap: 12 }}>
-              <h2 style={{ margin: 0 }}>📅 This Month</h2>
+            {tab === "roommates" && (
+              <RoommatesPanel
+                groupId={groupId ?? ""}
+                roommates={roommates}
+                myUid={uid ?? ""}
+                isCreator={uid === createdBy}
+                createdByUid={createdBy}
+                onRemove={removeMember}
+                onTransferAdmin={transferAdmin}
+                onLeave={leaveRoom}
+              />
+            )}
 
-              <div
-                style={{
-                  display: "flex",
-                  gap: 10,
-                  alignItems: "center",
-                  flexWrap: "wrap",
-                }}
-              >
-                <div style={{ fontSize: 12, opacity: 0.75 }}>Month</div>
-                <select
-                  value={`${selectedMonth.year}-${selectedMonth.month}`}
-                  onChange={(e) => {
-                    const [y, m] = e.target.value.split("-").map(Number);
-                    setSelectedMonth({ year: y, month: m });
-                  }}
-                  style={{
-                    background: "#0b1220",
-                    color: "white",
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    borderRadius: 10,
-                    padding: "8px 10px",
-                  }}
-                >
-                  {monthOptions.map((m) => (
-                    <option
-                      key={`${m.year}-${m.month}`}
-                      value={`${m.year}-${m.month}`}
-                    >
-                      {monthLabel(m.year, m.month)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-                <StatCard title="💰 Total spent" value={`$${formatMoney(monthTotal)}`} />
-                <StatCard title="🧾 You paid" value={`$${formatMoney(youPaid)}`} />
-                <StatCard title="💸 You owe" value={`$${formatMoney(youOwe)}`} />
-                <StatCard
-                  title="📈 Net"
-                  value={`${net >= 0 ? "+" : "-"}$${formatMoney(Math.abs(net))}`}
-                />
-                <StatCard title="📦 Expenses count" value={`${monthCount}`} />
-              </div>
-            </div>
-          )}
-
-          {tab === "expenses" && <ExpensesPanel />}
-          {tab === "settlements" && <SettlementsPanel />}
-          {tab === "analytics" && <AnalyticsPanel />}
-          {tab === "chores" && <ChoresPanel />}
-          {tab === "groceries" && <GroceryPanel />}
-
-          {tab === "roommates" && (
-            <RoommatesPanel
-              groupId={groupId ?? ""}
-              roommates={roommates}
-              myUid={uid ?? ""}
-              isCreator={uid === createdBy}
-              createdByUid={createdBy}
-              onRemove={removeMember}
-              onTransferAdmin={transferAdmin}
-              onLeave={leaveRoom}
-            />
-          )}
-
-          {tab === "reminders" && <RemindersPanel groupId={groupId ?? ""} />}
-          {tab === "chat" && <ChatPanel />}
-          {tab === "ai" && <AIAssistantPanel />}
-          {tab === "notifications" && <NotificationsPanel />}
-        </div>
+            {tab === "reminders" && <RemindersPanel groupId={groupId ?? ""} />}
+            {tab === "chat" && <ChatPanel />}
+            {tab === "ai" && <AIAssistantPanel />}
+            {tab === "notifications" && <NotificationsPanel />}
+          </div>
+        </main>
       </div>
     </div>
   );
@@ -747,72 +628,464 @@ function SidebarButton({
       onDragOver={onDragOver}
       onDrop={onDrop}
       style={{
-        marginBottom: 10,
         width: "100%",
         textAlign: "left",
-        padding: "12px 14px",
-        borderRadius: 14,
-        border: active ? "1px solid #7c3aed" : "1px solid rgba(255,255,255,0.08)",
+        padding: "13px 14px",
+        borderRadius: 16,
+        border: active
+          ? "1px solid rgba(129,140,248,0.75)"
+          : "1px solid rgba(255,255,255,0.08)",
         background: active
-          ? "linear-gradient(135deg, #7c3aed, #2563eb)"
-          : "#0f172a",
+          ? "linear-gradient(135deg, rgba(99,102,241,0.95), rgba(59,130,246,0.95))"
+          : "rgba(15,23,42,0.72)",
         color: "white",
-        fontWeight: active ? 900 : 700,
+        fontWeight: active ? 800 : 600,
         cursor: isReordering ? "grab" : "pointer",
         display: "flex",
         alignItems: "center",
-        gap: 10,
-        boxShadow: active ? "0 8px 24px rgba(124,58,237,0.35)" : "none",
-        opacity: isReordering ? 0.95 : 1,
+        gap: 12,
+        boxShadow: active
+          ? "0 14px 32px rgba(59,130,246,0.30)"
+          : "0 6px 16px rgba(0,0,0,0.14)",
+        transition: "all 0.2s ease",
+        transform: active ? "translateY(-1px)" : "translateY(0)",
+      }}
+      onMouseEnter={(e) => {
+        if (!isReordering && !active) {
+          e.currentTarget.style.transform = "translateY(-2px)";
+          e.currentTarget.style.boxShadow = "0 12px 24px rgba(0,0,0,0.22)";
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!active) {
+          e.currentTarget.style.transform = "translateY(0)";
+          e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.14)";
+        }
       }}
     >
       <span style={{ fontSize: 18 }}>{emoji}</span>
       <span style={{ flex: 1 }}>{label}</span>
-      {isReordering ? <span style={{ opacity: 0.7 }}>↕️</span> : null}
+      {isReordering ? <span style={{ opacity: 0.55 }}>↕</span> : null}
     </button>
   );
 }
 
 function StatCard({ title, value }: { title: string; value: string }) {
   return (
-    <div
-      style={{
-        border: "1px solid rgba(255,255,255,0.08)",
-        borderRadius: 16,
-        padding: "14px 16px",
-        background:
-          "linear-gradient(135deg, rgba(124,58,237,0.18), rgba(37,99,235,0.14))",
-        minWidth: 170,
-        boxShadow: "0 8px 24px rgba(0,0,0,0.22)",
-      }}
-    >
-      <div style={{ fontSize: 12, opacity: 0.8 }}>{title}</div>
-      <div style={{ fontSize: 24, fontWeight: 900, marginTop: 4 }}>{value}</div>
+    <div style={statCardStyle}>
+      <div style={statTitleStyle}>{title}</div>
+      <div style={statValueStyle}>{value}</div>
     </div>
   );
 }
 
-const actionBtnStyle: CSSProperties = {
-  border: "1px solid #2563eb",
-  borderRadius: 12,
-  padding: "10px 12px",
+function InfoPill({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={infoPillStyle}>
+      <div style={infoPillLabelStyle}>{label}</div>
+      <div style={infoPillValueStyle}>{value}</div>
+    </div>
+  );
+}
+
+const pageStyle: CSSProperties = {
+  minHeight: "100vh",
+  padding: 20,
+  background:
+    "radial-gradient(circle at top left, rgba(79,70,229,0.22), transparent 24%), radial-gradient(circle at top right, rgba(14,165,233,0.18), transparent 20%), linear-gradient(180deg, #050816 0%, #091127 42%, #060913 100%)",
+  color: "white",
+  position: "relative",
+  overflow: "hidden",
+};
+
+const auroraOne: CSSProperties = {
+  position: "absolute",
+  top: -120,
+  left: -120,
+  width: 300,
+  height: 300,
+  borderRadius: 999,
+  background: "rgba(99,102,241,0.20)",
+  filter: "blur(80px)",
+  pointerEvents: "none",
+};
+
+const auroraTwo: CSSProperties = {
+  position: "absolute",
+  bottom: -120,
+  right: -120,
+  width: 320,
+  height: 320,
+  borderRadius: 999,
+  background: "rgba(14,165,233,0.16)",
+  filter: "blur(90px)",
+  pointerEvents: "none",
+};
+
+const shellStyle: CSSProperties = {
+  position: "relative",
+  zIndex: 1,
+  display: "flex",
+  gap: 18,
+  alignItems: "flex-start",
+};
+
+const sidebarStyle: CSSProperties = {
+  width: 278,
+  border: "1px solid rgba(255,255,255,0.08)",
+  borderRadius: 24,
+  padding: 16,
+  background: "rgba(8,15,32,0.82)",
+  backdropFilter: "blur(14px)",
+  boxShadow: "0 20px 45px rgba(0,0,0,0.28)",
+  position: "sticky",
+  top: 20,
+};
+
+const sidebarTopStyle: CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+  marginBottom: 18,
+};
+
+const brandEyebrowStyle: CSSProperties = {
+  fontSize: 12,
+  letterSpacing: 1.2,
+  textTransform: "uppercase",
+  color: "rgba(191,219,254,0.72)",
+  marginBottom: 4,
+};
+
+const brandTitleStyle: CSSProperties = {
+  fontSize: 28,
+  fontWeight: 900,
+  letterSpacing: -0.8,
+  background: "linear-gradient(90deg, #c4b5fd 0%, #93c5fd 52%, #67e8f9 100%)",
+  WebkitBackgroundClip: "text",
+  WebkitTextFillColor: "transparent",
+};
+
+const iconActionStyle: CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.10)",
+  borderRadius: 14,
+  padding: "8px 10px",
+  color: "white",
+  cursor: "pointer",
+  fontWeight: 800,
+  boxShadow: "0 10px 24px rgba(0,0,0,0.20)",
+  transition: "all 0.2s ease",
+};
+
+const sidebarFooterStyle: CSSProperties = {
+  marginTop: 18,
+  paddingTop: 16,
+  borderTop: "1px solid rgba(255,255,255,0.08)",
+};
+
+const miniProfileStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 12,
+  padding: 12,
+  borderRadius: 18,
+  background: "rgba(255,255,255,0.04)",
+  border: "1px solid rgba(255,255,255,0.06)",
+};
+
+const miniAvatarStyle: CSSProperties = {
+  width: 42,
+  height: 42,
+  borderRadius: 999,
+  display: "grid",
+  placeItems: "center",
+  fontWeight: 900,
+  background: "linear-gradient(135deg, #6366f1, #0ea5e9)",
+  boxShadow: "0 10px 22px rgba(59,130,246,0.28)",
+};
+
+const miniNameStyle: CSSProperties = {
+  fontWeight: 700,
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+};
+
+const miniRoleStyle: CSSProperties = {
+  fontSize: 12,
+  color: "rgba(255,255,255,0.64)",
+  marginTop: 2,
+};
+
+const mainPanelStyle: CSSProperties = {
+  flex: 1,
+  border: "1px solid rgba(255,255,255,0.08)",
+  borderRadius: 28,
+  padding: 20,
+  background:
+    "linear-gradient(180deg, rgba(10,21,45,0.78) 0%, rgba(9,16,34,0.84) 100%)",
+  backdropFilter: "blur(14px)",
+  boxShadow: "0 24px 60px rgba(0,0,0,0.28)",
+  minHeight: "88vh",
+};
+
+const topBarStyle: CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: 14,
+  marginBottom: 18,
+};
+
+const topBarEyebrowStyle: CSSProperties = {
+  fontSize: 12,
+  textTransform: "uppercase",
+  letterSpacing: 1.1,
+  color: "rgba(191,219,254,0.68)",
+  marginBottom: 6,
+};
+
+const topBarTitleStyle: CSSProperties = {
+  margin: 0,
+  fontSize: 32,
+  lineHeight: 1.1,
+  letterSpacing: -1,
+};
+
+const notificationBtnStyle: CSSProperties = {
+  position: "relative",
+  border: "1px solid rgba(255,255,255,0.08)",
+  borderRadius: 16,
+  padding: "12px 14px",
+  background: "rgba(9,15,29,0.88)",
+  color: "white",
+  cursor: "pointer",
+  boxShadow: "0 10px 24px rgba(0,0,0,0.20)",
+  transition: "all 0.2s ease",
+};
+
+const notificationBtnActiveStyle: CSSProperties = {
+  background: "linear-gradient(135deg, rgba(245,158,11,0.95), rgba(249,115,22,0.95))",
+  border: "1px solid rgba(251,191,36,0.75)",
+  boxShadow: "0 14px 30px rgba(245,158,11,0.28)",
+};
+
+const notificationBadgeStyle: CSSProperties = {
+  position: "absolute",
+  top: -7,
+  right: -7,
+  background: "linear-gradient(135deg, #ef4444, #dc2626)",
+  color: "white",
+  borderRadius: 999,
+  padding: "3px 8px",
+  fontSize: 11,
+  fontWeight: 900,
+  border: "2px solid #091127",
+  boxShadow: "0 4px 10px rgba(239,68,68,0.4)",
+};
+
+const contentAreaStyle: CSSProperties = {
+  display: "grid",
+  gap: 16,
+};
+
+const heroCardStyle: CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.08)",
+  borderRadius: 24,
+  padding: 20,
+  background:
+    "linear-gradient(135deg, rgba(99,102,241,0.18), rgba(14,165,233,0.12) 55%, rgba(255,255,255,0.03))",
+  boxShadow: "0 18px 44px rgba(0,0,0,0.22)",
+};
+
+const heroHeaderStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 14,
+  marginBottom: 18,
+};
+
+const heroAvatarStyle: CSSProperties = {
+  width: 68,
+  height: 68,
+  borderRadius: 999,
+  display: "grid",
+  placeItems: "center",
+  fontWeight: 900,
+  fontSize: 22,
+  background: "linear-gradient(135deg, #6366f1, #3b82f6)",
+  boxShadow: "0 16px 30px rgba(59,130,246,0.26)",
+};
+
+const heroTitleStyle: CSSProperties = {
+  fontSize: 26,
+  fontWeight: 900,
+  lineHeight: 1.1,
+};
+
+const heroSubtitleStyle: CSSProperties = {
+  fontSize: 14,
+  color: "rgba(255,255,255,0.72)",
+};
+
+const profileGridStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+  gap: 12,
+};
+
+const infoPillStyle: CSSProperties = {
+  padding: 14,
+  borderRadius: 18,
+  background: "rgba(255,255,255,0.05)",
+  border: "1px solid rgba(255,255,255,0.07)",
+};
+
+const infoPillLabelStyle: CSSProperties = {
+  fontSize: 12,
+  color: "rgba(255,255,255,0.62)",
+  marginBottom: 6,
+};
+
+const infoPillValueStyle: CSSProperties = {
+  fontWeight: 700,
+  wordBreak: "break-word",
+};
+
+const actionRowStyle: CSSProperties = {
+  marginTop: 18,
+  display: "flex",
+  gap: 10,
+  flexWrap: "wrap",
+};
+
+const sectionCardStyle: CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.08)",
+  borderRadius: 22,
+  padding: 18,
+  background: "rgba(255,255,255,0.03)",
+  boxShadow: "0 14px 32px rgba(0,0,0,0.16)",
+};
+
+const sectionHeaderRowStyle: CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-end",
+  gap: 14,
+  flexWrap: "wrap",
+};
+
+const sectionTitleStyle: CSSProperties = {
+  fontSize: 20,
+  fontWeight: 800,
+  marginBottom: 6,
+};
+
+const sectionSubtleStyle: CSSProperties = {
+  color: "rgba(255,255,255,0.68)",
+  lineHeight: 1.5,
+};
+
+const inputLabelStyle: CSSProperties = {
+  fontSize: 12,
+  color: "rgba(255,255,255,0.66)",
+};
+
+const modernSelectStyle: CSSProperties = {
+  background: "rgba(7,12,25,0.92)",
+  color: "white",
+  border: "1px solid rgba(255,255,255,0.10)",
+  borderRadius: 14,
+  padding: "11px 14px",
+  outline: "none",
+  minWidth: 220,
+};
+
+const statsGridStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+  gap: 14,
+};
+
+const statCardStyle: CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.08)",
+  borderRadius: 20,
+  padding: "16px 18px",
+  background:
+    "linear-gradient(145deg, rgba(99,102,241,0.16), rgba(14,165,233,0.10), rgba(255,255,255,0.03))",
+  minHeight: 104,
+  boxShadow: "0 16px 32px rgba(0,0,0,0.18)",
+};
+
+const statTitleStyle: CSSProperties = {
+  fontSize: 12,
+  color: "rgba(255,255,255,0.74)",
+  marginBottom: 12,
+  textTransform: "uppercase",
+  letterSpacing: 0.7,
+};
+
+const statValueStyle: CSSProperties = {
+  fontSize: 28,
+  fontWeight: 900,
+  letterSpacing: -0.6,
+};
+
+const primaryBtnStyle: CSSProperties = {
+  border: "1px solid rgba(96,165,250,0.7)",
+  borderRadius: 14,
+  padding: "11px 15px",
   background: "linear-gradient(135deg, #60a5fa, #2563eb)",
   color: "white",
   fontWeight: 800,
   cursor: "pointer",
-  boxShadow: "0 8px 20px rgba(37,99,235,0.3)",
+  boxShadow: "0 14px 28px rgba(37,99,235,0.28)",
+  transition: "all 0.2s ease",
 };
 
 const dangerBtnStyle: CSSProperties = {
-  border: "1px solid #dc2626",
-  borderRadius: 12,
-  padding: "10px 12px",
+  border: "1px solid rgba(248,113,113,0.75)",
+  borderRadius: 14,
+  padding: "11px 15px",
   background: "linear-gradient(135deg, #ef4444, #b91c1c)",
   color: "white",
   fontWeight: 800,
   cursor: "pointer",
-  boxShadow: "0 8px 20px rgba(239,68,68,0.25)",
+  boxShadow: "0 14px 28px rgba(239,68,68,0.22)",
+  transition: "all 0.2s ease",
 };
+
+function getTabTitle(tab: Tab) {
+  switch (tab) {
+    case "profile":
+      return "Profile";
+    case "thisMonth":
+      return "This Month";
+    case "expenses":
+      return "Expenses";
+    case "settlements":
+      return "Settlements";
+    case "analytics":
+      return "Analytics";
+    case "chores":
+      return "Chores";
+    case "groceries":
+      return "Grocery";
+    case "roommates":
+      return "Roommates";
+    case "reminders":
+      return "Reminders";
+    case "chat":
+      return "Chat";
+    case "ai":
+      return "AI Assistant";
+    case "notifications":
+      return "Notifications";
+    default:
+      return "Dashboard";
+  }
+}
 
 function monthLabel(year: number, month: number) {
   const d = new Date(year, month, 1);

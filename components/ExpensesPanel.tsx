@@ -91,6 +91,35 @@ export default function ExpensesPanel() {
       ? round2(enteredAmount - previewShare)
       : 0;
 
+  const summary = useMemo(() => {
+    let youOweTotal = 0;
+    let youReceiveTotal = 0;
+
+    for (const exp of expenses) {
+      const splitMap = exp.splitMap || {};
+      const participantIds =
+        exp.participants && exp.participants.length > 0
+          ? exp.participants
+          : Object.keys(splitMap);
+
+      const payer = exp.paidByUid || exp.createdByUid || null;
+
+      const youShare = uid ? Number(splitMap[uid] || 0) : 0;
+      const youPaid = uid && payer === uid ? Number(exp.amount || 0) : 0;
+      const youNet = round2(youPaid - youShare);
+
+      if (participantIds.length === 0) continue;
+
+      if (youNet > 0) youReceiveTotal += youNet;
+      if (youNet < 0) youOweTotal += Math.abs(youNet);
+    }
+
+    return {
+      owe: round2(youOweTotal),
+      receive: round2(youReceiveTotal),
+    };
+  }, [expenses, uid]);
+
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (!u) {
@@ -308,100 +337,98 @@ export default function ExpensesPanel() {
     };
   }
 
-  if (loading) return <div style={{ padding: 8 }}>Loading expenses...</div>;
+  if (loading) return <div style={{ padding: 10, opacity: 0.7 }}>Loading your data...</div>;
 
   if (!groupId) {
     return (
-      <div style={{ padding: 8 }}>
-        <h2 style={{ marginTop: 0 }}>Expenses</h2>
-        <p style={{ opacity: 0.8 }}>
-          You are not in a room yet. Go to the Room page and join/create one.
+      <div style={{ padding: 10 }}>
+        <h2 style={{ marginTop: 0, marginBottom: 8 }}>Expenses</h2>
+        <p style={{ opacity: 0.78 }}>
+          You are not in a room yet. Go to the Room page and join or create one.
         </p>
       </div>
     );
   }
 
   return (
-    <div style={{ display: "grid", gap: 14 }}>
-      <h2 style={{ margin: 0 }}>Expenses</h2>
+    <div style={{ display: "grid", gap: 18 }}>
+      <div>
+        <h2 style={{ margin: 0, fontSize: 28 }}>Expenses</h2>
+        <div style={{ marginTop: 6, color: "rgba(255,255,255,0.68)" }}>
+          Track shared spending, preview split amounts, and review recent records.
+        </div>
+      </div>
 
-      <div
-        style={{
-          border: "1px solid #2b2b2b",
-          borderRadius: 12,
-          padding: 12,
-          background: "#111",
-          display: "grid",
-          gap: 10,
-        }}
-      >
-        <div style={{ fontWeight: 800 }}>Add expense</div>
+      <div style={panelStyle}>
+        <div style={sectionHeadingStyle}>Add expense</div>
 
-        <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Title (e.g., Dinner)"
-          style={inputStyle}
-          disabled={adding}
-        />
+        <div style={formGridStyle}>
+          <div style={{ display: "grid", gap: 8 }}>
+            <div style={fieldLabelStyle}>Title</div>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Dinner, utilities, shopping..."
+              style={inputStyle}
+              disabled={adding}
+            />
+          </div>
 
-        <input
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          placeholder="Amount (e.g., 25)"
-          inputMode="decimal"
-          style={inputStyle}
-          disabled={adding}
-        />
+          <div style={{ display: "grid", gap: 8 }}>
+            <div style={fieldLabelStyle}>Amount</div>
+            <input
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="25.00"
+              inputMode="decimal"
+              style={inputStyle}
+              disabled={adding}
+            />
+          </div>
+        </div>
 
-        <input
-          type="date"
-          value={expenseDate}
-          onChange={(e) => setExpenseDate(e.target.value)}
-          style={inputStyle}
-          disabled={adding}
-        />
+        <div style={{ display: "grid", gap: 8 }}>
+          <div style={fieldLabelStyle}>Expense date</div>
+          <input
+            type="date"
+            value={expenseDate}
+            onChange={(e) => setExpenseDate(e.target.value)}
+            style={inputStyle}
+            disabled={adding}
+          />
+        </div>
 
-        <div
-          style={{
-            border: "1px solid #2b2b2b",
-            borderRadius: 10,
-            padding: 12,
-            background: "#0b0b0b",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              gap: 10,
-              flexWrap: "wrap",
-            }}
-          >
-            <div style={{ fontWeight: 800 }}>Split with roommates</div>
+        <div style={innerCardStyle}>
+          <div style={splitHeaderStyle}>
+            <div>
+              <div style={sectionHeadingStyle}>Split with roommates</div>
+              <div style={helperTextStyle}>
+                Choose who should share this expense.
+              </div>
+            </div>
+
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button type="button" onClick={selectAllParticipants} style={miniBtnStyle}>
+              <button type="button" onClick={selectAllParticipants} style={secondaryBtnStyle}>
                 Select all
               </button>
-              <button type="button" onClick={clearAllParticipants} style={miniBtnStyle}>
+              <button type="button" onClick={clearAllParticipants} style={secondaryBtnStyle}>
                 Clear all
               </button>
             </div>
           </div>
 
-          <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
+          <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
             {roommates.map((mate) => (
               <label
                 key={mate.uid}
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  border: "1px solid #222",
-                  borderRadius: 10,
-                  padding: "10px 12px",
-                  background: "#111",
-                  cursor: "pointer",
+                  ...participantCardStyle,
+                  border: selectedParticipants[mate.uid]
+                    ? "1px solid rgba(96,165,250,0.55)"
+                    : "1px solid rgba(255,255,255,0.08)",
+                  background: selectedParticipants[mate.uid]
+                    ? "linear-gradient(135deg, rgba(59,130,246,0.18), rgba(99,102,241,0.12))"
+                    : "rgba(255,255,255,0.03)",
                 }}
               >
                 <input
@@ -409,14 +436,14 @@ export default function ExpensesPanel() {
                   checked={!!selectedParticipants[mate.uid]}
                   onChange={() => toggleParticipant(mate.uid)}
                 />
-                <span>
+                <span style={{ fontWeight: 600 }}>
                   {mate.name} {mate.uid === uid ? "(You)" : ""}
                 </span>
               </label>
             ))}
           </div>
 
-          <div style={{ marginTop: 10, fontSize: 13, opacity: 0.8 }}>
+          <div style={{ marginTop: 12, ...helperTextStyle }}>
             {selectedCount > 0 && amount && Number(amount) > 0
               ? `Each selected roommate owes about $${formatMoney(
                   Number(amount) / selectedCount
@@ -425,28 +452,30 @@ export default function ExpensesPanel() {
           </div>
 
           {selectedCount > 0 && Number.isFinite(enteredAmount) && enteredAmount > 0 && (
-            <div
-              style={{
-                marginTop: 12,
-                border: "1px solid #222",
-                borderRadius: 10,
-                padding: 12,
-                background: "#101010",
-                display: "grid",
-                gap: 6,
-                fontSize: 13,
-              }}
-            >
-              <div style={{ fontWeight: 800 }}>Preview</div>
-              <div>Total expense: ${formatMoney(enteredAmount)}</div>
-              <div>Split among: {selectedCount} member(s)</div>
-              <div>Each share: ${formatMoney(previewShare)}</div>
+            <div style={previewCardStyle}>
+              <div style={sectionHeadingStyle}>Preview</div>
+              <div style={previewRowStyle}>
+                <span>Total expense</span>
+                <strong>${formatMoney(enteredAmount)}</strong>
+              </div>
+              <div style={previewRowStyle}>
+                <span>Split among</span>
+                <strong>{selectedCount} member(s)</strong>
+              </div>
+              <div style={previewRowStyle}>
+                <span>Each share</span>
+                <strong>${formatMoney(previewShare)}</strong>
+              </div>
+
               {uid && selectedParticipants[uid] ? (
-                <div style={{ fontWeight: 700 }}>
-                  If you paid, you should receive: ${formatMoney(previewYouReceive)}
+                <div style={{ ...previewRowStyle, marginTop: 4 }}>
+                  <span>If you paid</span>
+                  <strong style={{ color: "#93c5fd" }}>
+                    Receive ${formatMoney(previewYouReceive)}
+                  </strong>
                 </div>
               ) : (
-                <div style={{ opacity: 0.8 }}>
+                <div style={{ ...helperTextStyle, marginTop: 4 }}>
                   You are not included in this split right now.
                 </div>
               )}
@@ -454,84 +483,67 @@ export default function ExpensesPanel() {
           )}
         </div>
 
-        {err && <div style={{ color: "#fca5a5", fontSize: 13 }}>{err}</div>}
+        {err && <div style={errorStyle}>{err}</div>}
 
         <button
           onClick={addExpense}
           disabled={adding}
           style={{
-            border: "1px solid #2b2b2b",
-            borderRadius: 10,
-            padding: "10px 12px",
-            background: "white",
-            color: "black",
-            fontWeight: 900,
-            cursor: "pointer",
-            opacity: adding ? 0.6 : 1,
+            ...primaryBtnStyle,
+            opacity: adding ? 0.7 : 1,
           }}
         >
-          {adding ? "Adding..." : "Add"}
+          {adding ? "Adding..." : "Add Expense"}
         </button>
       </div>
 
-      <div
-        style={{
-          border: "1px solid #2b2b2b",
-          borderRadius: 12,
-          padding: 12,
-          background: "#111",
-        }}
-      >
-        <div style={{ fontWeight: 800, marginBottom: 10 }}>Recent expenses</div>
+      <div style={summaryCardStyle}>
+        <div style={sectionHeadingStyle}>💰 Summary</div>
+        <div style={summaryGridStyle}>
+          <div style={summaryItemStyle}>
+            <div style={summaryLabelStyle}>You owe</div>
+            <div style={summaryValueStyle}>${formatMoney(summary.owe)}</div>
+          </div>
+          <div style={summaryItemStyle}>
+            <div style={summaryLabelStyle}>You should receive</div>
+            <div style={summaryValueStyle}>${formatMoney(summary.receive)}</div>
+          </div>
+        </div>
+      </div>
+
+      <div style={panelStyle}>
+        <div style={sectionHeadingStyle}>Recent expenses</div>
 
         {expenses.length === 0 ? (
-          <div style={{ opacity: 0.8 }}>No expenses yet.</div>
+          <div style={emptyStateStyle}>No expenses yet.</div>
         ) : (
-          <div style={{ display: "grid", gap: 10 }}>
+          <div style={{ display: "grid", gap: 14 }}>
             {expenses.map((exp) => {
               const breakdown = getExpenseBreakdown(exp);
 
               return (
-                <div
-                  key={exp.id}
-                  style={{
-                    border: "1px solid #2b2b2b",
-                    borderRadius: 12,
-                    padding: 12,
-                    background: "#0b0b0b",
-                    display: "grid",
-                    gap: 10,
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "flex-start",
-                      gap: 12,
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <div style={{ display: "grid", gap: 4 }}>
-                      <div style={{ fontWeight: 900 }}>{exp.title}</div>
+                <div key={exp.id} style={expenseCardStyle}>
+                  <div style={expenseTopStyle}>
+                    <div style={{ display: "grid", gap: 6 }}>
+                      <div style={expenseTitleStyle}>{exp.title}</div>
 
-                      <div style={{ fontSize: 13, opacity: 0.75 }}>
+                      <div style={metaTextStyle}>
                         {toDisplayDate(exp.date || exp.createdAt)}
                       </div>
 
-                      <div style={{ fontSize: 12, opacity: 0.7 }}>
+                      <div style={metaTextStyle}>
                         Paid by: {getName(breakdown.payer)}
                       </div>
 
                       {breakdown.participantIds.length > 0 ? (
-                        <div style={{ fontSize: 12, opacity: 0.7 }}>
+                        <div style={metaTextStyle}>
                           Split with {breakdown.participantIds.length} roommate(s)
                         </div>
                       ) : null}
                     </div>
 
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <div style={{ fontWeight: 900 }}>
+                    <div style={expenseTopRightStyle}>
+                      <div style={amountPillStyle}>
                         ${formatMoney(Number(exp.amount) || 0)}
                       </div>
 
@@ -558,43 +570,50 @@ export default function ExpensesPanel() {
                     </div>
                   </div>
 
-                  <div
-                    style={{
-                      border: "1px solid #222",
-                      borderRadius: 10,
-                      padding: 10,
-                      background: "#111",
-                      display: "grid",
-                      gap: 6,
-                      fontSize: 13,
-                    }}
-                  >
-                    <div style={{ fontWeight: 800 }}>Expense breakdown</div>
-                    <div>Total: ${formatMoney(exp.amount)}</div>
-                    <div>Each share: ${formatMoney(breakdown.perPerson)}</div>
+                  <div style={breakdownCardStyle}>
+                    <div style={sectionHeadingStyle}>Expense breakdown</div>
+
+                    <div style={previewRowStyle}>
+                      <span>Total</span>
+                      <strong>${formatMoney(exp.amount)}</strong>
+                    </div>
+
+                    <div style={previewRowStyle}>
+                      <span>Each share</span>
+                      <strong>${formatMoney(breakdown.perPerson)}</strong>
+                    </div>
 
                     {uid && (
                       <>
-                        <div>Your share: ${formatMoney(breakdown.youShare)}</div>
+                        <div style={previewRowStyle}>
+                          <span>Your share</span>
+                          <strong>${formatMoney(breakdown.youShare)}</strong>
+                        </div>
+
                         {breakdown.youNet > 0 ? (
-                          <div style={{ fontWeight: 800 }}>
-                            You should receive: ${formatMoney(breakdown.youNet)}
+                          <div style={statusGoodStyle}>
+                            You should receive ${formatMoney(breakdown.youNet)}
                           </div>
                         ) : breakdown.youNet < 0 ? (
-                          <div style={{ fontWeight: 800 }}>
-                            You owe: ${formatMoney(Math.abs(breakdown.youNet))}
+                          <div style={statusWarnStyle}>
+                            You owe ${formatMoney(Math.abs(breakdown.youNet))}
                           </div>
                         ) : (
-                          <div style={{ fontWeight: 800 }}>You are settled for this expense</div>
+                          <div style={statusNeutralStyle}>
+                            You are settled for this expense
+                          </div>
                         )}
                       </>
                     )}
 
-                    {Object.entries(exp.splitMap || {}).map(([personUid, owed]) => (
-                      <div key={personUid} style={{ opacity: 0.9 }}>
-                        {getName(personUid)} share: ${formatMoney(Number(owed || 0))}
-                      </div>
-                    ))}
+                    <div style={{ display: "grid", gap: 6, marginTop: 4 }}>
+                      {Object.entries(exp.splitMap || {}).map(([personUid, owed]) => (
+                        <div key={personUid} style={splitRowStyle}>
+                          <span>{getName(personUid)} share</span>
+                          <strong>${formatMoney(Number(owed || 0))}</strong>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               );
@@ -606,20 +625,247 @@ export default function ExpensesPanel() {
   );
 }
 
-const inputStyle: React.CSSProperties = {
-  background: "#0b0b0b",
-  color: "white",
-  border: "1px solid #2b2b2b",
-  borderRadius: 10,
-  padding: "10px 12px",
-  outline: "none",
+const panelStyle: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.08)",
+  borderRadius: 24,
+  padding: 20,
+  background:
+    "linear-gradient(180deg, rgba(8,13,28,0.88) 0%, rgba(10,16,34,0.82) 100%)",
+  boxShadow: "0 18px 38px rgba(0,0,0,0.20)",
+  display: "grid",
+  gap: 16,
 };
 
-const miniBtnStyle: React.CSSProperties = {
-  border: "1px solid #2b2b2b",
-  borderRadius: 8,
-  padding: "6px 10px",
-  background: "#111",
+const innerCardStyle: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.08)",
+  borderRadius: 20,
+  padding: 16,
+  background: "rgba(255,255,255,0.03)",
+};
+
+const sectionHeadingStyle: React.CSSProperties = {
+  fontWeight: 800,
+  fontSize: 18,
+};
+
+const helperTextStyle: React.CSSProperties = {
+  fontSize: 13,
+  color: "rgba(255,255,255,0.66)",
+};
+
+const fieldLabelStyle: React.CSSProperties = {
+  fontSize: 12,
+  color: "rgba(255,255,255,0.68)",
+  textTransform: "uppercase",
+  letterSpacing: 0.6,
+};
+
+const formGridStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gap: 14,
+};
+
+const splitHeaderStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: 12,
+  flexWrap: "wrap",
+};
+
+const inputStyle: React.CSSProperties = {
+  background: "rgba(5,10,20,0.92)",
+  color: "white",
+  border: "1px solid rgba(255,255,255,0.10)",
+  borderRadius: 14,
+  padding: "12px 14px",
+  outline: "none",
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
+};
+
+const participantCardStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 12,
+  borderRadius: 14,
+  padding: "12px 14px",
+  cursor: "pointer",
+};
+
+const previewCardStyle: React.CSSProperties = {
+  marginTop: 14,
+  border: "1px solid rgba(96,165,250,0.22)",
+  borderRadius: 18,
+  padding: 14,
+  background: "linear-gradient(135deg, rgba(59,130,246,0.12), rgba(99,102,241,0.08))",
+  display: "grid",
+  gap: 10,
+};
+
+const previewRowStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 12,
+  alignItems: "center",
+  fontSize: 14,
+};
+
+const primaryBtnStyle: React.CSSProperties = {
+  border: "1px solid rgba(96,165,250,0.75)",
+  borderRadius: 14,
+  padding: "12px 16px",
+  background: "linear-gradient(135deg, #60a5fa, #2563eb)",
+  color: "white",
+  fontWeight: 800,
+  cursor: "pointer",
+  boxShadow: "0 14px 28px rgba(37,99,235,0.24)",
+  transition: "all 0.2s ease",
+};
+
+const secondaryBtnStyle: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.10)",
+  borderRadius: 12,
+  padding: "9px 12px",
+  background: "rgba(255,255,255,0.04)",
   color: "white",
   cursor: "pointer",
+  fontWeight: 700,
+  transition: "all 0.2s ease",
+};
+
+const errorStyle: React.CSSProperties = {
+  color: "#fda4af",
+  fontSize: 13,
+  background: "rgba(127,29,29,0.22)",
+  border: "1px solid rgba(248,113,113,0.24)",
+  borderRadius: 14,
+  padding: "10px 12px",
+};
+
+const summaryCardStyle: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.08)",
+  borderRadius: 24,
+  padding: 20,
+  background:
+    "linear-gradient(135deg, rgba(15,23,42,0.9), rgba(30,41,59,0.85))",
+  boxShadow: "0 18px 38px rgba(0,0,0,0.18)",
+  display: "grid",
+  gap: 14,
+};
+
+const summaryGridStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+  gap: 14,
+};
+
+const summaryItemStyle: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.08)",
+  borderRadius: 18,
+  padding: 16,
+  background: "rgba(255,255,255,0.03)",
+};
+
+const summaryLabelStyle: React.CSSProperties = {
+  fontSize: 12,
+  color: "rgba(255,255,255,0.68)",
+  marginBottom: 8,
+  textTransform: "uppercase",
+  letterSpacing: 0.6,
+};
+
+const summaryValueStyle: React.CSSProperties = {
+  fontSize: 24,
+  fontWeight: 900,
+};
+
+const emptyStateStyle: React.CSSProperties = {
+  color: "rgba(255,255,255,0.68)",
+  padding: "10px 2px",
+};
+
+const expenseCardStyle: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.08)",
+  borderRadius: 20,
+  padding: 16,
+  background: "rgba(255,255,255,0.03)",
+  display: "grid",
+  gap: 14,
+};
+
+const expenseTopStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: 14,
+  flexWrap: "wrap",
+};
+
+const expenseTitleStyle: React.CSSProperties = {
+  fontWeight: 900,
+  fontSize: 18,
+};
+
+const metaTextStyle: React.CSSProperties = {
+  fontSize: 13,
+  color: "rgba(255,255,255,0.66)",
+};
+
+const expenseTopRightStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+  flexWrap: "wrap",
+};
+
+const amountPillStyle: React.CSSProperties = {
+  padding: "10px 14px",
+  borderRadius: 999,
+  fontWeight: 900,
+  background: "linear-gradient(135deg, rgba(99,102,241,0.26), rgba(59,130,246,0.22))",
+  border: "1px solid rgba(129,140,248,0.26)",
+};
+
+const breakdownCardStyle: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.08)",
+  borderRadius: 18,
+  padding: 14,
+  background: "rgba(6,10,22,0.76)",
+  display: "grid",
+  gap: 10,
+};
+
+const statusGoodStyle: React.CSSProperties = {
+  borderRadius: 14,
+  padding: "10px 12px",
+  background: "rgba(22,163,74,0.18)",
+  border: "1px solid rgba(74,222,128,0.24)",
+  color: "#bbf7d0",
+  fontWeight: 700,
+};
+
+const statusWarnStyle: React.CSSProperties = {
+  borderRadius: 14,
+  padding: "10px 12px",
+  background: "rgba(217,119,6,0.16)",
+  border: "1px solid rgba(251,191,36,0.22)",
+  color: "#fde68a",
+  fontWeight: 700,
+};
+
+const statusNeutralStyle: React.CSSProperties = {
+  borderRadius: 14,
+  padding: "10px 12px",
+  background: "rgba(148,163,184,0.12)",
+  border: "1px solid rgba(148,163,184,0.18)",
+  color: "#e2e8f0",
+  fontWeight: 700,
+};
+
+const splitRowStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 12,
+  fontSize: 14,
 };

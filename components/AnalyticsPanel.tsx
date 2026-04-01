@@ -162,14 +162,19 @@ export default function AnalyticsPanel() {
     return lines;
   }, [stats, users, uid, expenses.length]);
 
-  if (loading) return <div>Loading analytics...</div>;
-  if (!groupId) return <div>You are not in a room yet.</div>;
+  if (loading) return <div style={{ padding: 10, opacity: 0.7 }}>Loading analytics...</div>;
+  if (!groupId) return <div style={{ padding: 10 }}>You are not in a room yet.</div>;
 
   return (
-    <div style={{ display: "grid", gap: 14 }}>
-      <h2 style={{ margin: 0 }}>Analytics & AI Insights</h2>
+    <div style={{ display: "grid", gap: 18 }}>
+      <div>
+        <h2 style={{ margin: 0, fontSize: 28 }}>Analytics & AI Insights</h2>
+        <div style={{ marginTop: 6, color: "rgba(255,255,255,0.68)" }}>
+          Understand spending patterns, weekly trends, and key room insights.
+        </div>
+      </div>
 
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+      <div style={statsGridStyle}>
         <StatCard title="Total Expenses" value={`$${stats.total.toFixed(2)}`} />
         <StatCard title="Expense Records" value={`${expenses.length}`} />
         <StatCard
@@ -178,11 +183,11 @@ export default function AnalyticsPanel() {
         />
       </div>
 
-      <div style={cardStyle}>
-        <div style={{ fontWeight: 900, marginBottom: 10 }}>Spend by roommate</div>
-        <div style={{ display: "grid", gap: 10 }}>
+      <div style={panelStyle}>
+        <div style={sectionHeadingStyle}>Spend by roommate</div>
+        <div style={{ display: "grid", gap: 14 }}>
           {Object.entries(stats.spendByUser).length === 0 ? (
-            <div style={{ opacity: 0.75 }}>No data yet.</div>
+            <div style={emptyStateStyle}>No data yet.</div>
           ) : (
             Object.entries(stats.spendByUser)
               .sort((a, b) => b[1] - a[1])
@@ -198,11 +203,11 @@ export default function AnalyticsPanel() {
         </div>
       </div>
 
-      <div style={cardStyle}>
-        <div style={{ fontWeight: 900, marginBottom: 10 }}>Weekly trend</div>
-        <div style={{ display: "grid", gap: 10 }}>
+      <div style={panelStyle}>
+        <div style={sectionHeadingStyle}>Weekly trend</div>
+        <div style={{ display: "grid", gap: 14 }}>
           {Object.entries(stats.weekly).length === 0 ? (
-            <div style={{ opacity: 0.75 }}>No weekly data.</div>
+            <div style={emptyStateStyle}>No weekly data.</div>
           ) : (
             Object.entries(stats.weekly)
               .sort((a, b) => a[0].localeCompare(b[0]))
@@ -218,9 +223,9 @@ export default function AnalyticsPanel() {
         </div>
       </div>
 
-      <div style={cardStyle}>
-        <div style={{ fontWeight: 900, marginBottom: 10 }}>AI insights</div>
-        <div style={{ display: "grid", gap: 8 }}>
+      <div style={panelStyle}>
+        <div style={sectionHeadingStyle}>AI insights</div>
+        <div style={{ display: "grid", gap: 10 }}>
           {insights.map((line, index) => (
             <div key={index} style={insightStyle}>
               {line}
@@ -244,26 +249,18 @@ function BarRow({
   const width = `${Math.max((value / Math.max(max, 1)) * 100, 6)}%`;
 
   return (
-    <div style={{ display: "grid", gap: 6 }}>
+    <div style={{ display: "grid", gap: 8 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-        <div>{label}</div>
+        <div style={{ fontWeight: 600 }}>{label}</div>
         <div style={{ fontWeight: 800 }}>${value.toFixed(2)}</div>
       </div>
-      <div
-        style={{
-          width: "100%",
-          height: 12,
-          background: "#111",
-          border: "1px solid #2b2b2b",
-          borderRadius: 999,
-          overflow: "hidden",
-        }}
-      >
+      <div style={barTrackStyle}>
         <div
           style={{
             width,
             height: "100%",
-            background: "white",
+            background: "linear-gradient(135deg, #60a5fa, #2563eb)",
+            borderRadius: 999,
           }}
         />
       </div>
@@ -273,17 +270,9 @@ function BarRow({
 
 function StatCard({ title, value }: { title: string; value: string }) {
   return (
-    <div
-      style={{
-        border: "1px solid #2b2b2b",
-        borderRadius: 12,
-        padding: 12,
-        background: "#0b0b0b",
-        minWidth: 180,
-      }}
-    >
-      <div style={{ fontSize: 12, opacity: 0.7 }}>{title}</div>
-      <div style={{ fontSize: 18, fontWeight: 900 }}>{value}</div>
+    <div style={statCardStyle}>
+      <div style={statTitleStyle}>{title}</div>
+      <div style={statValueStyle}>{value}</div>
     </div>
   );
 }
@@ -315,16 +304,69 @@ function getWeekLabel(dateString?: string, createdAt?: any) {
   return `${d.getFullYear()}-W${String(week).padStart(2, "0")}`;
 }
 
-const cardStyle: React.CSSProperties = {
-  border: "1px solid #2b2b2b",
-  borderRadius: 12,
-  padding: 14,
-  background: "#0b0b0b",
+const statsGridStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+  gap: 14,
+};
+
+const statCardStyle: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.08)",
+  borderRadius: 20,
+  padding: "16px 18px",
+  background:
+    "linear-gradient(145deg, rgba(99,102,241,0.16), rgba(14,165,233,0.10), rgba(255,255,255,0.03))",
+  minHeight: 104,
+  boxShadow: "0 16px 32px rgba(0,0,0,0.18)",
+};
+
+const statTitleStyle: React.CSSProperties = {
+  fontSize: 12,
+  color: "rgba(255,255,255,0.74)",
+  marginBottom: 12,
+  textTransform: "uppercase",
+  letterSpacing: 0.7,
+};
+
+const statValueStyle: React.CSSProperties = {
+  fontSize: 26,
+  fontWeight: 900,
+  letterSpacing: -0.4,
+};
+
+const panelStyle: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.08)",
+  borderRadius: 24,
+  padding: 20,
+  background:
+    "linear-gradient(180deg, rgba(8,13,28,0.88) 0%, rgba(10,16,34,0.82) 100%)",
+  boxShadow: "0 18px 38px rgba(0,0,0,0.20)",
+  display: "grid",
+  gap: 16,
+};
+
+const sectionHeadingStyle: React.CSSProperties = {
+  fontWeight: 800,
+  fontSize: 18,
+};
+
+const emptyStateStyle: React.CSSProperties = {
+  color: "rgba(255,255,255,0.68)",
+};
+
+const barTrackStyle: React.CSSProperties = {
+  width: "100%",
+  height: 12,
+  background: "rgba(255,255,255,0.04)",
+  border: "1px solid rgba(255,255,255,0.08)",
+  borderRadius: 999,
+  overflow: "hidden",
 };
 
 const insightStyle: React.CSSProperties = {
-  border: "1px solid #2b2b2b",
-  borderRadius: 10,
-  padding: "10px 12px",
-  background: "#111",
+  border: "1px solid rgba(255,255,255,0.08)",
+  borderRadius: 16,
+  padding: "12px 14px",
+  background: "rgba(255,255,255,0.03)",
+  color: "rgba(255,255,255,0.86)",
 };

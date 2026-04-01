@@ -108,6 +108,8 @@ export default function NotificationsPanel() {
     return Object.keys(selected).filter((id) => selected[id]);
   }, [selected]);
 
+  const readCount = rows.length - unreadCount;
+
   function toggleOne(id: string) {
     setSelected((prev) => ({ ...prev, [id]: !prev[id] }));
   }
@@ -170,29 +172,81 @@ export default function NotificationsPanel() {
     setSelected({});
   }
 
-  if (loading) return <div className="p-2 text-white">Loading...</div>;
+  if (loading) {
+    return (
+      <div style={shellStyle}>
+        <div style={heroCardStyle}>
+          <div style={heroGlowStyle} />
+          <div style={{ position: "relative", zIndex: 1 }}>
+            <div style={eyebrowStyle}>Notifications</div>
+            <h2 style={titleStyle}>Loading notifications...</h2>
+            <p style={subtitleStyle}>Bringing in your latest room activity.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-4 text-white">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h2 className="text-lg font-semibold">Notifications</h2>
-          <p className="text-sm text-gray-400">Unread: {unreadCount}</p>
+    <div style={shellStyle}>
+      <div style={heroCardStyle}>
+        <div style={heroGlowStyle} />
+        <div style={{ position: "relative", zIndex: 1 }}>
+          <div style={eyebrowStyle}>Activity Center</div>
+          <div style={heroHeaderStyle}>
+            <div>
+              <h2 style={titleStyle}>Notifications</h2>
+              <p style={subtitleStyle}>
+                Stay on top of reminders, settlements, room activity, and recent
+                updates from your shared household.
+              </p>
+            </div>
+          </div>
+
+          <div style={statsGridStyle}>
+            <div style={statCardStyle}>
+              <div style={statLabelStyle}>Total</div>
+              <div style={statValueStyle}>{rows.length}</div>
+            </div>
+            <div style={statCardStyle}>
+              <div style={statLabelStyle}>Unread</div>
+              <div style={statValueStyle}>{unreadCount}</div>
+            </div>
+            <div style={statCardStyle}>
+              <div style={statLabelStyle}>Read</div>
+              <div style={statValueStyle}>{readCount}</div>
+            </div>
+            <div style={statCardStyle}>
+              <div style={statLabelStyle}>Selected</div>
+              <div style={statValueStyle}>{selectedIds.length}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style={toolbarCardStyle}>
+        <div style={toolbarHeaderStyle}>
+          <div>
+            <div style={sectionEyebrowStyle}>Manage</div>
+            <h3 style={sectionTitleStyle}>Quick actions</h3>
+            <p style={sectionTextStyle}>
+              Review, mark, and clean up notifications from one place.
+            </p>
+          </div>
         </div>
 
-        <div className="flex flex-wrap gap-2 justify-end">
-          <button
-            onClick={markAllRead}
-            className="text-sm border px-3 py-2 rounded bg-white text-black"
-          >
+        <div style={toolbarButtonsStyle}>
+          <button onClick={markAllRead} style={primaryButtonStyle}>
             Mark all read
           </button>
 
           <button
             onClick={deleteSelected}
             disabled={selectedIds.length === 0}
-            className="text-sm border px-3 py-2 rounded"
-            style={{ opacity: selectedIds.length === 0 ? 0.5 : 1 }}
+            style={{
+              ...secondaryButtonStyle,
+              ...(selectedIds.length === 0 ? disabledButtonStyle : {}),
+            }}
           >
             Delete selected
           </button>
@@ -200,8 +254,10 @@ export default function NotificationsPanel() {
           <button
             onClick={deleteAll}
             disabled={rows.length === 0}
-            className="text-sm border px-3 py-2 rounded"
-            style={{ opacity: rows.length === 0 ? 0.5 : 1 }}
+            style={{
+              ...dangerButtonStyle,
+              ...(rows.length === 0 ? disabledButtonStyle : {}),
+            }}
           >
             Delete all
           </button>
@@ -209,58 +265,74 @@ export default function NotificationsPanel() {
       </div>
 
       {rows.length === 0 ? (
-        <p className="text-gray-400">No notifications yet.</p>
+        <div style={emptyStateStyle}>
+          <div style={emptyIconStyle}>🔔</div>
+          <h3 style={emptyTitleStyle}>No notifications yet</h3>
+          <p style={emptyTextStyle}>
+            When your room has updates like reminders, settlements, or new shared
+            activity, they will appear here.
+          </p>
+        </div>
       ) : (
-        <div className="space-y-2">
+        <div style={listStyle}>
           {rows.map((n) => {
             const isUnread = uid ? !(n.readBy ?? []).includes(uid) : false;
             const isChecked = !!selected[n.id];
+            const typeMeta = getTypeMeta(n.type);
 
             return (
               <div
                 key={n.id}
-                className="w-full border rounded-2xl p-4"
-                style={{ opacity: isUnread ? 1 : 0.65 }}
+                style={{
+                  ...notifCardStyle,
+                  opacity: isUnread ? 1 : 0.72,
+                  boxShadow: isUnread
+                    ? "0 14px 32px rgba(59,130,246,0.08)"
+                    : "0 10px 24px rgba(0,0,0,0.22)",
+                }}
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3 flex-1">
-                    <input
-                      type="checkbox"
-                      checked={isChecked}
-                      onChange={() => toggleOne(n.id)}
-                      className="mt-1"
-                    />
+                <div style={notifRowStyle}>
+                  <div style={notifLeftStyle}>
+                    <label style={checkboxWrapStyle}>
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => toggleOne(n.id)}
+                        style={checkboxStyle}
+                      />
+                    </label>
 
                     <button
                       onClick={() => markOneRead(n.id)}
-                      className="text-left flex-1"
-                      style={{ width: "100%" }}
+                      style={notifMainButtonStyle}
                     >
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <div className="font-semibold">{n.title}</div>
-                        {isUnread ? (
-                          <span className="text-xs px-2 py-1 rounded border">
-                            New
-                          </span>
-                        ) : null}
+                      <div style={notifHeaderStyle}>
+                        <div style={notifTitleBlockStyle}>
+                          <div style={notifTitleRowStyle}>
+                            <span style={typeBadgeStyle(typeMeta.bg, typeMeta.color)}>
+                              {typeMeta.label}
+                            </span>
+
+                            {isUnread ? (
+                              <span style={newBadgeStyle}>New</span>
+                            ) : null}
+                          </div>
+
+                          <div style={notifTitleStyle}>{n.title}</div>
+                        </div>
                       </div>
 
                       {n.body ? (
-                        <div className="text-sm text-gray-300 mt-1">
-                          {formatBodyText(n.body)}
-                        </div>
+                        <div style={notifBodyStyle}>{formatBodyText(n.body)}</div>
                       ) : null}
 
-                      <div className="text-xs text-gray-500 mt-2">
-                        {formatCreatedAt(n.createdAt)}
+                      <div style={notifFooterStyle}>
+                        <span>{formatCreatedAt(n.createdAt)}</span>
                       </div>
                     </button>
                   </div>
 
-                  <button
-                    onClick={() => deleteOne(n.id)}
-                    className="text-xs border px-2 py-1 rounded"
-                  >
+                  <button onClick={() => deleteOne(n.id)} style={iconDeleteButtonStyle}>
                     Delete
                   </button>
                 </div>
@@ -295,3 +367,350 @@ function formatCreatedAt(value: any) {
     return "";
   }
 }
+
+function getTypeMeta(type: string) {
+  const normalized = String(type || "info").toLowerCase();
+
+  if (normalized.includes("settlement")) {
+    return {
+      label: "Settlement",
+      bg: "rgba(59,130,246,0.14)",
+      color: "#93c5fd",
+    };
+  }
+
+  if (normalized.includes("reminder")) {
+    return {
+      label: "Reminder",
+      bg: "rgba(168,85,247,0.14)",
+      color: "#d8b4fe",
+    };
+  }
+
+  if (normalized.includes("expense")) {
+    return {
+      label: "Expense",
+      bg: "rgba(34,197,94,0.14)",
+      color: "#86efac",
+    };
+  }
+
+  return {
+    label: "Info",
+    bg: "rgba(148,163,184,0.14)",
+    color: "#cbd5e1",
+  };
+}
+
+function typeBadgeStyle(bg: string, color: string): React.CSSProperties {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    borderRadius: 999,
+    padding: "6px 10px",
+    fontSize: 11,
+    fontWeight: 700,
+    background: bg,
+    color,
+    border: "1px solid rgba(255,255,255,0.08)",
+  };
+}
+
+const shellStyle: React.CSSProperties = {
+  display: "grid",
+  gap: 18,
+  color: "#fff",
+};
+
+const heroCardStyle: React.CSSProperties = {
+  position: "relative",
+  overflow: "hidden",
+  borderRadius: 28,
+  padding: 24,
+  border: "1px solid rgba(255,255,255,0.09)",
+  background:
+    "linear-gradient(135deg, rgba(59,130,246,0.16), rgba(139,92,246,0.16), rgba(15,23,42,0.95))",
+  boxShadow: "0 24px 60px rgba(0,0,0,0.35)",
+  backdropFilter: "blur(18px)",
+};
+
+const heroGlowStyle: React.CSSProperties = {
+  position: "absolute",
+  inset: -80,
+  background:
+    "radial-gradient(circle at top left, rgba(96,165,250,0.22), transparent 32%), radial-gradient(circle at bottom right, rgba(168,85,247,0.18), transparent 30%)",
+  pointerEvents: "none",
+};
+
+const eyebrowStyle: React.CSSProperties = {
+  fontSize: 12,
+  textTransform: "uppercase",
+  letterSpacing: "0.18em",
+  color: "rgba(191,219,254,0.9)",
+  fontWeight: 700,
+  marginBottom: 10,
+};
+
+const titleStyle: React.CSSProperties = {
+  margin: 0,
+  fontSize: "clamp(1.6rem, 2vw, 2.2rem)",
+  fontWeight: 800,
+  color: "#f8fafc",
+};
+
+const subtitleStyle: React.CSSProperties = {
+  margin: "8px 0 0",
+  maxWidth: 760,
+  lineHeight: 1.6,
+  color: "rgba(226,232,240,0.8)",
+  fontSize: 14,
+};
+
+const heroHeaderStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 16,
+  flexWrap: "wrap",
+};
+
+const statsGridStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+  gap: 14,
+  marginTop: 20,
+};
+
+const statCardStyle: React.CSSProperties = {
+  borderRadius: 20,
+  padding: 16,
+  border: "1px solid rgba(255,255,255,0.08)",
+  background: "rgba(8,15,30,0.55)",
+  backdropFilter: "blur(12px)",
+};
+
+const statLabelStyle: React.CSSProperties = {
+  fontSize: 12,
+  color: "rgba(191,219,254,0.78)",
+  marginBottom: 8,
+};
+
+const statValueStyle: React.CSSProperties = {
+  fontSize: 24,
+  fontWeight: 800,
+  color: "#ffffff",
+};
+
+const toolbarCardStyle: React.CSSProperties = {
+  borderRadius: 24,
+  padding: 20,
+  border: "1px solid rgba(255,255,255,0.08)",
+  background: "rgba(10,14,24,0.82)",
+  boxShadow: "0 18px 40px rgba(0,0,0,0.28)",
+  backdropFilter: "blur(18px)",
+};
+
+const toolbarHeaderStyle: React.CSSProperties = {
+  marginBottom: 16,
+};
+
+const sectionEyebrowStyle: React.CSSProperties = {
+  fontSize: 11,
+  textTransform: "uppercase",
+  letterSpacing: "0.16em",
+  color: "#93c5fd",
+  fontWeight: 700,
+  marginBottom: 8,
+};
+
+const sectionTitleStyle: React.CSSProperties = {
+  margin: 0,
+  color: "#f8fafc",
+  fontSize: 20,
+  fontWeight: 800,
+};
+
+const sectionTextStyle: React.CSSProperties = {
+  margin: "8px 0 0",
+  color: "rgba(203,213,225,0.72)",
+  fontSize: 14,
+  lineHeight: 1.6,
+};
+
+const toolbarButtonsStyle: React.CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 12,
+};
+
+const primaryButtonStyle: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.12)",
+  borderRadius: 14,
+  padding: "12px 16px",
+  background:
+    "linear-gradient(135deg, rgba(59,130,246,0.95), rgba(139,92,246,0.92))",
+  color: "#ffffff",
+  fontWeight: 800,
+  cursor: "pointer",
+  boxShadow: "0 12px 30px rgba(59,130,246,0.22)",
+};
+
+const secondaryButtonStyle: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.1)",
+  borderRadius: 14,
+  padding: "12px 16px",
+  background: "rgba(255,255,255,0.05)",
+  color: "#e2e8f0",
+  fontWeight: 700,
+  cursor: "pointer",
+};
+
+const dangerButtonStyle: React.CSSProperties = {
+  border: "1px solid rgba(248,113,113,0.2)",
+  borderRadius: 14,
+  padding: "12px 16px",
+  background: "rgba(239,68,68,0.14)",
+  color: "#fecaca",
+  fontWeight: 700,
+  cursor: "pointer",
+};
+
+const disabledButtonStyle: React.CSSProperties = {
+  opacity: 0.45,
+  cursor: "not-allowed",
+};
+
+const listStyle: React.CSSProperties = {
+  display: "grid",
+  gap: 14,
+};
+
+const notifCardStyle: React.CSSProperties = {
+  borderRadius: 22,
+  padding: 16,
+  border: "1px solid rgba(255,255,255,0.08)",
+  background:
+    "linear-gradient(180deg, rgba(15,23,42,0.84), rgba(2,6,23,0.96))",
+};
+
+const notifRowStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 16,
+  alignItems: "flex-start",
+};
+
+const notifLeftStyle: React.CSSProperties = {
+  display: "flex",
+  gap: 14,
+  flex: 1,
+};
+
+const checkboxWrapStyle: React.CSSProperties = {
+  paddingTop: 6,
+};
+
+const checkboxStyle: React.CSSProperties = {
+  width: 16,
+  height: 16,
+  cursor: "pointer",
+};
+
+const notifMainButtonStyle: React.CSSProperties = {
+  background: "transparent",
+  border: "none",
+  padding: 0,
+  textAlign: "left",
+  color: "inherit",
+  cursor: "pointer",
+  width: "100%",
+};
+
+const notifHeaderStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 12,
+  alignItems: "flex-start",
+};
+
+const notifTitleBlockStyle: React.CSSProperties = {
+  display: "grid",
+  gap: 10,
+};
+
+const notifTitleRowStyle: React.CSSProperties = {
+  display: "flex",
+  gap: 8,
+  flexWrap: "wrap",
+  alignItems: "center",
+};
+
+const newBadgeStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  borderRadius: 999,
+  padding: "6px 10px",
+  fontSize: 11,
+  fontWeight: 700,
+  background: "rgba(34,197,94,0.14)",
+  color: "#86efac",
+  border: "1px solid rgba(255,255,255,0.08)",
+};
+
+const notifTitleStyle: React.CSSProperties = {
+  fontSize: 17,
+  fontWeight: 800,
+  color: "#f8fafc",
+  lineHeight: 1.4,
+};
+
+const notifBodyStyle: React.CSSProperties = {
+  marginTop: 10,
+  color: "rgba(226,232,240,0.82)",
+  fontSize: 14,
+  lineHeight: 1.7,
+};
+
+const notifFooterStyle: React.CSSProperties = {
+  marginTop: 14,
+  color: "rgba(148,163,184,0.8)",
+  fontSize: 12,
+};
+
+const iconDeleteButtonStyle: React.CSSProperties = {
+  border: "1px solid rgba(248,113,113,0.18)",
+  borderRadius: 12,
+  padding: "10px 12px",
+  background: "rgba(239,68,68,0.1)",
+  color: "#fecaca",
+  fontWeight: 700,
+  cursor: "pointer",
+  flexShrink: 0,
+};
+
+const emptyStateStyle: React.CSSProperties = {
+  borderRadius: 28,
+  padding: 28,
+  border: "1px solid rgba(255,255,255,0.08)",
+  background:
+    "linear-gradient(180deg, rgba(15,23,42,0.82), rgba(2,6,23,0.96))",
+  textAlign: "center",
+};
+
+const emptyIconStyle: React.CSSProperties = {
+  fontSize: 34,
+  marginBottom: 12,
+};
+
+const emptyTitleStyle: React.CSSProperties = {
+  margin: 0,
+  color: "#f8fafc",
+  fontSize: 22,
+  fontWeight: 800,
+};
+
+const emptyTextStyle: React.CSSProperties = {
+  margin: "10px auto 0",
+  maxWidth: 520,
+  color: "rgba(203,213,225,0.72)",
+  lineHeight: 1.6,
+};
