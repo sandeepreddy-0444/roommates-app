@@ -39,6 +39,12 @@ type Message = {
   text: string;
 };
 
+const MOBILE_BREAKPOINT = 900;
+const EXPENSE_LIMIT = 200;
+const REMINDER_LIMIT = 60;
+const CONTEXT_EXPENSE_LIMIT = 80;
+const CONTEXT_REMINDER_LIMIT = 40;
+
 export default function AIAssistantPanel() {
   const [uid, setUid] = useState<string | null>(null);
   const [groupId, setGroupId] = useState<string | null>(null);
@@ -48,6 +54,7 @@ export default function AIAssistantPanel() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const prevMessageCountRef = useRef(0);
 
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -60,6 +67,9 @@ export default function AIAssistantPanel() {
 - What reminders are coming up?`,
     },
   ]);
+
+  const isMobile =
+    typeof window !== "undefined" ? window.innerWidth <= MOBILE_BREAKPOINT : false;
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
@@ -103,7 +113,7 @@ export default function AIAssistantPanel() {
     const q = query(
       collection(db, "groups", groupId, "expenses"),
       orderBy("createdAt", "desc"),
-      limit(500)
+      limit(EXPENSE_LIMIT)
     );
 
     const unsub = onSnapshot(q, (snap) => {
@@ -136,7 +146,7 @@ export default function AIAssistantPanel() {
     const q = query(
       collection(db, "groups", groupId, "reminders"),
       orderBy("dueDate", "asc"),
-      limit(100)
+      limit(REMINDER_LIMIT)
     );
 
     const unsub = onSnapshot(q, (snap) => {
@@ -157,8 +167,16 @@ export default function AIAssistantPanel() {
   }, [groupId]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
+    const hasNewMessage = messages.length > prevMessageCountRef.current;
+    prevMessageCountRef.current = messages.length;
+
+    if (!hasNewMessage && !loading) return;
+
+    messagesEndRef.current?.scrollIntoView({
+      behavior: isMobile ? "auto" : "smooth",
+      block: "end",
+    });
+  }, [messages, loading, isMobile]);
 
   const computed = useMemo(() => {
     const myOwe = expenses.reduce((sum, e) => {
@@ -188,7 +206,35 @@ export default function AIAssistantPanel() {
     };
   }, [expenses, uid]);
 
-  const activeRemindersCount = reminders.filter((r) => r.isActive).length;
+  const activeRemindersCount = useMemo(
+    () => reminders.filter((r) => r.isActive).length,
+    [reminders]
+  );
+
+  const summarizedExpenses = useMemo(
+    () =>
+      expenses.slice(0, CONTEXT_EXPENSE_LIMIT).map((e) => ({
+        id: e.id,
+        title: e.title,
+        amount: e.amount,
+        paidByUid: e.paidByUid || e.createdByUid || "",
+        splitMap: e.splitMap || {},
+        participants: e.participants || [],
+        date: e.date || "",
+      })),
+    [expenses]
+  );
+
+  const summarizedReminders = useMemo(
+    () =>
+      reminders.slice(0, CONTEXT_REMINDER_LIMIT).map((r) => ({
+        id: r.id,
+        title: r.title,
+        dueDate: r.dueDate,
+        isActive: r.isActive,
+      })),
+    [reminders]
+  );
 
   async function send() {
     const text = input.trim();
@@ -212,8 +258,8 @@ export default function AIAssistantPanel() {
             currentUserName: uid ? users[uid] || uid : null,
             groupId,
             users,
-            expenses,
-            reminders,
+            expenses: summarizedExpenses,
+            reminders: summarizedReminders,
             summary: {
               myOwe: computed.myOwe,
               totalExpenses: expenses.length,
@@ -347,7 +393,12 @@ export default function AIAssistantPanel() {
 
             {loading && (
               <div style={messageRowStyle}>
-                <div style={{ ...messageBubbleStyle, ...assistantMessageStyle }}>
+                <div
+                  style={{
+                    ...messageBubbleStyle,
+                    ...assistantMessageStyle,
+                  }}
+                >
                   <div style={messageRoleStyle}>Assistant</div>
                   <div style={thinkingWrapStyle}>
                     <span style={thinkingDotStyle} />
@@ -367,7 +418,7 @@ export default function AIAssistantPanel() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask: How much do I owe?"
-              rows={4}
+              rows={3}
               style={textareaStyle}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
@@ -384,6 +435,7 @@ export default function AIAssistantPanel() {
               </div>
 
               <button
+                type="button"
                 onClick={send}
                 style={{
                   ...primaryButtonStyle,
@@ -412,6 +464,7 @@ export default function AIAssistantPanel() {
               ].map((prompt) => (
                 <button
                   key={prompt}
+                  type="button"
                   onClick={() => setInput(prompt)}
                   style={promptButtonStyle}
                 >
@@ -440,7 +493,7 @@ export default function AIAssistantPanel() {
               </div>
               <div style={contextRowStyle}>
                 <span style={contextLabelStyle}>Current user</span>
-                <span style={contextValueStyle}>
+                <span style={contextUserValueStyle}>
                   {uid ? users[uid] || "You" : "You"}
                 </span>
               </div>
@@ -473,25 +526,26 @@ function isThisMonth(dateString?: string, createdAt?: any) {
 const shellStyle: React.CSSProperties = {
   display: "grid",
   gap: 18,
+  minWidth: 0,
 };
 
 const heroCardStyle: React.CSSProperties = {
   position: "relative",
   overflow: "hidden",
   borderRadius: 28,
-  padding: 24,
+  padding: "clamp(16px, 3vw, 24px)",
   border: "1px solid rgba(255,255,255,0.09)",
   background:
     "linear-gradient(135deg, rgba(59,130,246,0.16), rgba(139,92,246,0.16), rgba(15,23,42,0.95))",
-  boxShadow: "0 24px 60px rgba(0,0,0,0.35)",
-  backdropFilter: "blur(18px)",
+  boxShadow: "0 20px 42px rgba(0,0,0,0.28)",
+  minWidth: 0,
 };
 
 const heroGlowStyle: React.CSSProperties = {
   position: "absolute",
   inset: -80,
   background:
-    "radial-gradient(circle at top left, rgba(96,165,250,0.22), transparent 32%), radial-gradient(circle at bottom right, rgba(168,85,247,0.18), transparent 30%)",
+    "radial-gradient(circle at top left, rgba(96,165,250,0.18), transparent 32%), radial-gradient(circle at bottom right, rgba(168,85,247,0.14), transparent 30%)",
   pointerEvents: "none",
 };
 
@@ -506,9 +560,10 @@ const eyebrowStyle: React.CSSProperties = {
 
 const titleStyle: React.CSSProperties = {
   margin: 0,
-  fontSize: "clamp(1.6rem, 2vw, 2.2rem)",
+  fontSize: "clamp(1.4rem, 3vw, 2rem)",
   fontWeight: 800,
   color: "#f8fafc",
+  wordBreak: "break-word",
 };
 
 const subtitleStyle: React.CSSProperties = {
@@ -524,11 +579,14 @@ const heroHeaderStyle: React.CSSProperties = {
   justifyContent: "space-between",
   gap: 16,
   flexWrap: "wrap",
+  minWidth: 0,
+  flexDirection: "column",
+  alignItems: "flex-start",
 };
 
 const statsGridStyle: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+  gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
   gap: 14,
   marginTop: 20,
 };
@@ -538,7 +596,7 @@ const statCardStyle: React.CSSProperties = {
   padding: 16,
   border: "1px solid rgba(255,255,255,0.08)",
   background: "rgba(8,15,30,0.55)",
-  backdropFilter: "blur(12px)",
+  minWidth: 0,
 };
 
 const statLabelStyle: React.CSSProperties = {
@@ -548,42 +606,46 @@ const statLabelStyle: React.CSSProperties = {
 };
 
 const statValueStyle: React.CSSProperties = {
-  fontSize: 24,
+  fontSize: 22,
   fontWeight: 800,
   color: "#ffffff",
+  wordBreak: "break-word",
 };
 
 const layoutGridStyle: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "minmax(0, 1.7fr) minmax(300px, 0.9fr)",
+  gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
   gap: 18,
   alignItems: "start",
+  minWidth: 0,
 };
 
 const chatCardStyle: React.CSSProperties = {
   borderRadius: 24,
-  padding: 20,
+  padding: "clamp(16px, 3vw, 20px)",
   border: "1px solid rgba(255,255,255,0.08)",
   background: "rgba(10,14,24,0.82)",
-  boxShadow: "0 18px 40px rgba(0,0,0,0.28)",
-  backdropFilter: "blur(18px)",
+  boxShadow: "0 16px 30px rgba(0,0,0,0.22)",
   display: "grid",
   gap: 16,
+  minWidth: 0,
 };
 
 const sidePanelStyle: React.CSSProperties = {
   display: "grid",
   gap: 18,
   alignContent: "start",
+  minWidth: 0,
 };
 
 const tipsCardStyle: React.CSSProperties = {
   borderRadius: 24,
-  padding: 20,
+  padding: "clamp(16px, 3vw, 20px)",
   border: "1px solid rgba(255,255,255,0.08)",
   background:
     "linear-gradient(180deg, rgba(15,23,42,0.84), rgba(2,6,23,0.98))",
-  boxShadow: "0 18px 40px rgba(0,0,0,0.28)",
+  boxShadow: "0 16px 30px rgba(0,0,0,0.22)",
+  minWidth: 0,
 };
 
 const chatHeaderStyle: React.CSSProperties = {
@@ -591,6 +653,7 @@ const chatHeaderStyle: React.CSSProperties = {
   justifyContent: "space-between",
   gap: 16,
   flexWrap: "wrap",
+  minWidth: 0,
 };
 
 const sectionEyebrowStyle: React.CSSProperties = {
@@ -607,6 +670,7 @@ const sectionTitleStyle: React.CSSProperties = {
   color: "#f8fafc",
   fontSize: 20,
   fontWeight: 800,
+  wordBreak: "break-word",
 };
 
 const sectionTextStyle: React.CSSProperties = {
@@ -617,8 +681,8 @@ const sectionTextStyle: React.CSSProperties = {
 };
 
 const messagesPanelStyle: React.CSSProperties = {
-  minHeight: 360,
-  maxHeight: 560,
+  minHeight: 260,
+  maxHeight: "56vh",
   overflowY: "auto",
   display: "grid",
   gap: 14,
@@ -627,20 +691,26 @@ const messagesPanelStyle: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,0.06)",
   background:
     "linear-gradient(180deg, rgba(2,6,23,0.82), rgba(15,23,42,0.5))",
+  minWidth: 0,
+  WebkitOverflowScrolling: "touch",
+  overscrollBehavior: "contain",
 };
 
 const messageRowStyle: React.CSSProperties = {
   display: "flex",
+  minWidth: 0,
 };
 
 const messageBubbleStyle: React.CSSProperties = {
-  maxWidth: "84%",
+  maxWidth: "92%",
   borderRadius: 22,
-  padding: 16,
+  padding: 14,
   border: "1px solid rgba(255,255,255,0.08)",
   whiteSpace: "pre-wrap",
-  lineHeight: 1.75,
-  boxShadow: "0 12px 28px rgba(0,0,0,0.22)",
+  lineHeight: 1.7,
+  boxShadow: "0 10px 22px rgba(0,0,0,0.18)",
+  wordBreak: "break-word",
+  overflowWrap: "anywhere",
 };
 
 const userMessageStyle: React.CSSProperties = {
@@ -684,12 +754,13 @@ const thinkingDotStyle: React.CSSProperties = {
 
 const composerStyle: React.CSSProperties = {
   borderRadius: 20,
-  padding: 16,
+  padding: "clamp(12px, 3vw, 16px)",
   border: "1px solid rgba(255,255,255,0.08)",
   background:
     "linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.03))",
   display: "grid",
   gap: 12,
+  minWidth: 0,
 };
 
 const textareaStyle: React.CSSProperties = {
@@ -701,9 +772,10 @@ const textareaStyle: React.CSSProperties = {
   color: "white",
   outline: "none",
   resize: "vertical",
-  minHeight: 120,
+  minHeight: 100,
   fontSize: 14,
   lineHeight: 1.65,
+  boxSizing: "border-box",
 };
 
 const composerFooterStyle: React.CSSProperties = {
@@ -712,11 +784,13 @@ const composerFooterStyle: React.CSSProperties = {
   gap: 12,
   alignItems: "center",
   flexWrap: "wrap",
+  flexDirection: "column",
 };
 
 const hintTextStyle: React.CSSProperties = {
   color: "rgba(203,213,225,0.68)",
   fontSize: 13,
+  width: "100%",
 };
 
 const primaryButtonStyle: React.CSSProperties = {
@@ -728,7 +802,10 @@ const primaryButtonStyle: React.CSSProperties = {
   color: "#ffffff",
   fontWeight: 800,
   cursor: "pointer",
-  boxShadow: "0 12px 30px rgba(59,130,246,0.22)",
+  boxShadow: "0 10px 22px rgba(59,130,246,0.20)",
+  width: "100%",
+  WebkitTapHighlightColor: "transparent",
+  touchAction: "manipulation",
 };
 
 const disabledButtonStyle: React.CSSProperties = {
@@ -753,6 +830,12 @@ const promptButtonStyle: React.CSSProperties = {
   cursor: "pointer",
   fontWeight: 700,
   boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
+  fontSize: 15,
+  lineHeight: 1.5,
+  whiteSpace: "normal",
+  wordBreak: "break-word",
+  WebkitTapHighlightColor: "transparent",
+  touchAction: "manipulation",
 };
 
 const contextListStyle: React.CSSProperties = {
@@ -781,6 +864,15 @@ const contextValueStyle: React.CSSProperties = {
   color: "#ffffff",
   fontWeight: 800,
   fontSize: 14,
+};
+
+const contextUserValueStyle: React.CSSProperties = {
+  color: "#ffffff",
+  fontWeight: 800,
+  fontSize: 14,
+  maxWidth: "50%",
+  textAlign: "right",
+  wordBreak: "break-word",
 };
 
 const emptyStateStyle: React.CSSProperties = {

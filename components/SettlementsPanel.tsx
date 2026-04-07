@@ -35,6 +35,8 @@ type Suggestion = {
   amount: number;
 };
 
+const EXPENSE_LIMIT = 200;
+
 export default function SettlementsPanel() {
   const [uid, setUid] = useState<string | null>(null);
   const [groupId, setGroupId] = useState<string | null>(null);
@@ -69,6 +71,7 @@ export default function SettlementsPanel() {
       collection(db, "groups", groupId, "members"),
       async (snap) => {
         const next: UserMap = {};
+
         await Promise.all(
           snap.docs.map(async (memberDoc) => {
             const userSnap = await getDoc(doc(db, "users", memberDoc.id));
@@ -76,6 +79,7 @@ export default function SettlementsPanel() {
             next[memberDoc.id] = data?.name || memberDoc.id.slice(0, 6);
           })
         );
+
         setUsers(next);
       }
     );
@@ -89,7 +93,7 @@ export default function SettlementsPanel() {
     const q = query(
       collection(db, "groups", groupId, "expenses"),
       orderBy("createdAt", "desc"),
-      limit(500)
+      limit(EXPENSE_LIMIT)
     );
 
     const unsub = onSnapshot(q, (snap) => {
@@ -106,6 +110,7 @@ export default function SettlementsPanel() {
           settled: !!data?.settled,
         };
       });
+
       setExpenses(rows);
     });
 
@@ -140,8 +145,7 @@ export default function SettlementsPanel() {
   );
 
   const totalUnsettledAmount = useMemo(
-    () =>
-      unsettledExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0),
+    () => unsettledExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0),
     [unsettledExpenses]
   );
 
@@ -150,6 +154,7 @@ export default function SettlementsPanel() {
   async function markExpenseSettled(expenseId: string) {
     if (!groupId) return;
     setSavingId(expenseId);
+
     try {
       await updateDoc(doc(db, "groups", groupId, "expenses", expenseId), {
         settled: true,
@@ -162,7 +167,9 @@ export default function SettlementsPanel() {
 
   async function saveSuggestion(s: Suggestion) {
     if (!groupId || !uid) return;
-    setSavingId(`${s.from}-${s.to}-${s.amount}`);
+
+    const saveKey = `${s.from}-${s.to}-${s.amount}`;
+    setSavingId(saveKey);
 
     try {
       await addDoc(collection(db, "groups", groupId, "settlements"), {
@@ -216,14 +223,17 @@ export default function SettlementsPanel() {
 
   if (loading) {
     return (
-      <div style={shellStyle}>
-        <div style={heroCardStyle}>
-          <div style={heroGlowStyle} />
-          <div style={{ position: "relative", zIndex: 1 }}>
-            <div style={eyebrowStyle}>Settlements</div>
-            <h2 style={titleStyle}>Loading settlements...</h2>
-            <p style={subtitleStyle}>Preparing your room balance overview.</p>
+      <div className="grid gap-4">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 sm:p-5">
+          <div className="text-xs uppercase tracking-[0.18em] text-sky-200/90 font-bold">
+            Settlements
           </div>
+          <h2 className="mt-2 text-xl sm:text-2xl font-bold text-white">
+            Loading settlements...
+          </h2>
+          <p className="mt-2 text-sm text-white/70">
+            Preparing your room balance overview.
+          </p>
         </div>
       </div>
     );
@@ -231,11 +241,13 @@ export default function SettlementsPanel() {
 
   if (!groupId) {
     return (
-      <div style={shellStyle}>
-        <div style={emptyStateStyle}>
-          <div style={emptyIconStyle}>🏠</div>
-          <h2 style={emptyTitleStyle}>You are not in a room yet</h2>
-          <p style={emptyTextStyle}>
+      <div className="grid gap-4">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-center">
+          <div className="text-3xl mb-3">🏠</div>
+          <h2 className="text-xl sm:text-2xl font-bold text-white">
+            You are not in a room yet
+          </h2>
+          <p className="mt-2 text-sm text-white/70 max-w-xl mx-auto leading-6">
             Join or create a room to view balances, settlement plans, and shared
             expense activity.
           </p>
@@ -245,192 +257,217 @@ export default function SettlementsPanel() {
   }
 
   return (
-    <div style={shellStyle}>
-      <div style={heroCardStyle}>
-        <div style={heroGlowStyle} />
-        <div style={{ position: "relative", zIndex: 1 }}>
-          <div style={eyebrowStyle}>Smart Settlements</div>
-          <div style={heroHeaderRowStyle}>
-            <div>
-              <h2 style={titleStyle}>Balance the room faster</h2>
-              <p style={subtitleStyle}>
-                See who is owed, who owes, and the simplest plan to settle
-                everything with fewer transactions.
-              </p>
+    <div className="grid gap-4 min-w-0 text-white">
+      <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 sm:p-5">
+        <div className="text-xs uppercase tracking-[0.18em] text-sky-200/90 font-bold">
+          Smart Settlements
+        </div>
+
+        <h2 className="mt-2 text-xl sm:text-2xl font-bold break-words">
+          Balance the room faster
+        </h2>
+
+        <p className="mt-2 text-sm text-white/70 leading-6 max-w-3xl">
+          See who is owed, who owes, and the simplest plan to settle everything
+          with fewer transactions.
+        </p>
+
+        <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+            <div className="text-[11px] text-white/65">Unsettled Expenses</div>
+            <div className="mt-1 text-xl sm:text-2xl font-bold">
+              {unsettledExpenses.length}
             </div>
           </div>
 
-          <div style={statsGridStyle}>
-            <div style={statCardStyle}>
-              <div style={statLabelStyle}>Unsettled Expenses</div>
-              <div style={statValueStyle}>{unsettledExpenses.length}</div>
+          <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+            <div className="text-[11px] text-white/65">Pending Value</div>
+            <div className="mt-1 text-xl sm:text-2xl font-bold break-words">
+              ${round2(totalUnsettledAmount).toFixed(2)}
             </div>
+          </div>
 
-            <div style={statCardStyle}>
-              <div style={statLabelStyle}>Pending Value</div>
-              <div style={statValueStyle}>
-                ${round2(totalUnsettledAmount).toFixed(2)}
-              </div>
-            </div>
+          <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+            <div className="text-[11px] text-white/65">Roommates</div>
+            <div className="mt-1 text-xl sm:text-2xl font-bold">{peopleCount}</div>
+          </div>
 
-            <div style={statCardStyle}>
-              <div style={statLabelStyle}>Roommates</div>
-              <div style={statValueStyle}>{peopleCount}</div>
-            </div>
-
-            <div style={statCardStyle}>
-              <div style={statLabelStyle}>Best Plan Steps</div>
-              <div style={statValueStyle}>{suggestions.length}</div>
+          <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+            <div className="text-[11px] text-white/65">Best Plan Steps</div>
+            <div className="mt-1 text-xl sm:text-2xl font-bold">
+              {suggestions.length}
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div style={sectionCardStyle}>
-        <div style={sectionHeaderStyle}>
-          <div>
-            <div style={sectionEyebrowStyle}>Overview</div>
-            <h3 style={sectionTitleStyle}>Current balances</h3>
-            <p style={sectionTextStyle}>
-              These balances reflect all unsettled shared expenses in the room.
-            </p>
+      <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 sm:p-5">
+        <div className="mb-4">
+          <div className="text-[11px] uppercase tracking-[0.16em] text-sky-300 font-bold">
+            Overview
           </div>
+          <h3 className="mt-2 text-lg sm:text-xl font-bold">Current balances</h3>
+          <p className="mt-1 text-sm text-white/70 leading-6">
+            These balances reflect all unsettled shared expenses in the room.
+          </p>
         </div>
 
         {Object.keys(users).length === 0 ? (
-          <div style={emptyInnerCardStyle}>No roommates found.</div>
+          <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-white/70">
+            No roommates found.
+          </div>
         ) : (
-          <div style={balanceGridStyle}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
             {Object.entries(users).map(([personUid, name]) => {
               const value = balances[personUid] || 0;
               const positive = value >= 0;
 
               return (
-                <div key={personUid} style={balanceCardStyle}>
-                  <div style={balanceTopRowStyle}>
-                    <div>
-                      <div style={balanceNameStyle}>
+                <div
+                  key={personUid}
+                  className="rounded-xl border border-white/10 bg-black/20 p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-semibold break-words">
                         {name}
                         {uid === personUid ? " (You)" : ""}
                       </div>
-                      <div style={balanceHelperStyle}>
+                      <div className="mt-1 text-xs text-white/60">
                         {positive ? "Should receive" : "Needs to pay"}
                       </div>
                     </div>
 
                     <div
-                      style={{
-                        ...pillStyle,
-                        ...(positive ? positivePillStyle : negativePillStyle),
-                      }}
+                      className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold border ${
+                        positive
+                          ? "bg-green-500/10 text-green-300 border-green-400/20"
+                          : "bg-red-500/10 text-red-300 border-red-400/20"
+                      }`}
                     >
                       {positive ? "Credit" : "Debit"}
                     </div>
                   </div>
 
                   <div
-                    style={{
-                      ...balanceValueStyle,
-                      color: positive ? "#8ef7b7" : "#ff9a9a",
-                    }}
+                    className={`mt-4 text-2xl sm:text-3xl font-extrabold break-words ${
+                      positive ? "text-green-300" : "text-red-300"
+                    }`}
                   >
-                    {value >= 0 ? "+" : "-"}$
-                    {Math.abs(round2(value)).toFixed(2)}
+                    {value >= 0 ? "+" : "-"}${Math.abs(round2(value)).toFixed(2)}
                   </div>
                 </div>
               );
             })}
           </div>
         )}
-      </div>
+      </section>
 
-      <div style={sectionCardStyle}>
-        <div style={sectionHeaderStyle}>
-          <div>
-            <div style={sectionEyebrowStyle}>Optimization</div>
-            <h3 style={sectionTitleStyle}>Best settlement plan</h3>
-            <p style={sectionTextStyle}>
-              We simplify debt paths so the room can settle with fewer payments.
-            </p>
+      <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 sm:p-5">
+        <div className="mb-4">
+          <div className="text-[11px] uppercase tracking-[0.16em] text-sky-300 font-bold">
+            Optimization
           </div>
+          <h3 className="mt-2 text-lg sm:text-xl font-bold">
+            Best settlement plan
+          </h3>
+          <p className="mt-1 text-sm text-white/70 leading-6">
+            We simplify debt paths so the room can settle with fewer payments.
+          </p>
         </div>
 
         {suggestions.length === 0 ? (
-          <div style={emptyInnerCardStyle}>Everything is already balanced 🎉</div>
+          <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-white/70">
+            Everything is already balanced 🎉
+          </div>
         ) : (
-          <div style={suggestionsGridStyle}>
+          <div className="grid gap-3">
             {suggestions.map((s, index) => {
               const id = `${s.from}-${s.to}-${s.amount}`;
 
               return (
-                <div key={index} style={suggestionCardStyle}>
-                  <div style={suggestionLeftStyle}>
-                    <div style={suggestionLabelStyle}>Suggested payment</div>
-                    <div style={suggestionTitleStyle}>
-                      <strong>{users[s.from] || "Someone"}</strong>
-                      <span style={arrowStyle}>→</span>
-                      <strong>{users[s.to] || "Someone"}</strong>
-                    </div>
-                    <div style={suggestionSubtextStyle}>
-                      Settle this balance in one payment.
-                    </div>
-                  </div>
+                <div
+                  key={index}
+                  className="rounded-xl border border-white/10 bg-black/20 p-4"
+                >
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="min-w-0">
+                      <div className="text-[11px] uppercase tracking-[0.14em] text-sky-300 font-bold">
+                        Suggested payment
+                      </div>
 
-                  <div style={suggestionRightStyle}>
-                    <div style={suggestionAmountStyle}>
-                      ${round2(s.amount).toFixed(2)}
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-base sm:text-lg font-semibold break-words">
+                        <strong>{users[s.from] || "Someone"}</strong>
+                        <span className="text-white/60">→</span>
+                        <strong>{users[s.to] || "Someone"}</strong>
+                      </div>
+
+                      <div className="mt-2 text-sm text-white/65">
+                        Settle this balance in one payment.
+                      </div>
                     </div>
-                    <button
-                      onClick={() => saveSuggestion(s)}
-                      disabled={savingId === id}
-                      style={{
-                        ...primaryButtonStyle,
-                        minWidth: 160,
-                        ...(savingId === id ? disabledButtonStyle : {}),
-                      }}
-                    >
-                      {savingId === id ? "Saving..." : "Save Suggestion"}
-                    </button>
+
+                    <div className="flex flex-col gap-3 lg:items-end">
+                      <div className="text-2xl sm:text-3xl font-extrabold break-words">
+                        ${round2(s.amount).toFixed(2)}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => saveSuggestion(s)}
+                        disabled={savingId === id}
+                        className="w-full lg:w-auto min-h-[46px] rounded-xl border border-white/15 bg-blue-500/90 px-4 py-3 font-semibold text-white disabled:opacity-60"
+                      >
+                        {savingId === id ? "Saving..." : "Save Suggestion"}
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
             })}
           </div>
         )}
-      </div>
+      </section>
 
-      <div style={sectionCardStyle}>
-        <div style={sectionHeaderStyle}>
-          <div>
-            <div style={sectionEyebrowStyle}>Expenses</div>
-            <h3 style={sectionTitleStyle}>Unsettled expenses</h3>
-            <p style={sectionTextStyle}>
-              Review expense splits and close items once everyone is settled.
-            </p>
+      <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 sm:p-5">
+        <div className="mb-4">
+          <div className="text-[11px] uppercase tracking-[0.16em] text-sky-300 font-bold">
+            Expenses
           </div>
+          <h3 className="mt-2 text-lg sm:text-xl font-bold">
+            Unsettled expenses
+          </h3>
+          <p className="mt-1 text-sm text-white/70 leading-6">
+            Review expense splits and close items once everyone is settled.
+          </p>
         </div>
 
         {unsettledExpenses.length === 0 ? (
-          <div style={emptyInnerCardStyle}>No unsettled expenses.</div>
+          <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-white/70">
+            No unsettled expenses.
+          </div>
         ) : (
-          <div style={expensesListStyle}>
+          <div className="grid gap-4">
             {unsettledExpenses.map((e) => {
               const details = getExpenseDetails(e);
 
               return (
-                <div key={e.id} style={expenseCardStyle}>
-                  <div style={expenseHeaderStyle}>
-                    <div style={expenseMainStyle}>
-                      <div style={expenseTitleStyle}>{e.title}</div>
+                <div
+                  key={e.id}
+                  className="rounded-xl border border-white/10 bg-black/20 p-4"
+                >
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-lg font-bold break-words">{e.title}</div>
 
-                      <div style={expenseMetaWrapStyle}>
-                        <div style={metaChipStyle}>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-white/75">
                           Total: ${Number(e.amount || 0).toFixed(2)}
                         </div>
-                        <div style={metaChipStyle}>
+                        <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-white/75">
                           Each share: ${details.perPerson.toFixed(2)}
                         </div>
-                        <div style={metaChipStyle}>
+                        <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-white/75 break-words">
                           Paid by: {users[details.payer || ""] || "Unknown"}
                           {details.payer === uid ? " (You)" : ""}
                         </div>
@@ -438,14 +475,13 @@ export default function SettlementsPanel() {
 
                       {uid && (
                         <div
-                          style={{
-                            ...myNetBadgeStyle,
-                            ...(details.myNet > 0
-                              ? positiveNetStyle
+                          className={`mt-3 inline-flex rounded-full border px-3 py-2 text-xs sm:text-sm font-semibold ${
+                            details.myNet > 0
+                              ? "bg-green-500/10 text-green-300 border-green-400/20"
                               : details.myNet < 0
-                              ? negativeNetStyle
-                              : neutralNetStyle),
-                          }}
+                              ? "bg-red-500/10 text-red-300 border-red-400/20"
+                              : "bg-white/5 text-white/75 border-white/10"
+                          }`}
                         >
                           {details.myNet > 0
                             ? `You should receive $${details.myNet.toFixed(2)}`
@@ -456,36 +492,39 @@ export default function SettlementsPanel() {
                       )}
                     </div>
 
-                    <div style={expenseActionWrapStyle}>
+                    <div className="w-full xl:w-auto">
                       <button
+                        type="button"
                         onClick={() => markExpenseSettled(e.id)}
                         disabled={savingId === e.id}
-                        style={{
-                          ...primaryButtonStyle,
-                          ...(savingId === e.id ? disabledButtonStyle : {}),
-                        }}
+                        className="w-full xl:w-auto min-h-[46px] rounded-xl border border-white/15 bg-blue-500/90 px-4 py-3 font-semibold text-white disabled:opacity-60"
                       >
                         {savingId === e.id ? "Saving..." : "Mark Settled"}
                       </button>
                     </div>
                   </div>
 
-                  <div style={splitPanelStyle}>
-                    <div style={splitPanelHeaderStyle}>
-                      <div style={splitPanelTitleStyle}>Split details</div>
-                      <div style={splitPanelHintStyle}>
+                  <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="font-semibold text-sm text-slate-200">
+                        Split details
+                      </div>
+                      <div className="text-xs text-white/55">
                         Individual share breakdown
                       </div>
                     </div>
 
-                    <div style={splitGridStyle}>
+                    <div className="mt-3 grid gap-2">
                       {Object.entries(e.splitMap || {}).map(([personUid, owed]) => (
-                        <div key={personUid} style={splitRowStyle}>
-                          <div style={splitNameStyle}>
+                        <div
+                          key={personUid}
+                          className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-black/20 px-3 py-2"
+                        >
+                          <div className="text-sm text-sky-100 break-words min-w-0">
                             {users[personUid] || "Someone"}
                             {personUid === uid ? " (You)" : ""}
                           </div>
-                          <div style={splitAmountStyle}>
+                          <div className="text-sm font-semibold shrink-0">
                             ${round2(Number(owed || 0)).toFixed(2)}
                           </div>
                         </div>
@@ -497,7 +536,7 @@ export default function SettlementsPanel() {
             })}
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }
@@ -518,6 +557,7 @@ function simplifyDebts(balances: Record<string, number>) {
 
   while (i < debtors.length && j < creditors.length) {
     const pay = Math.min(debtors[i].amount, creditors[j].amount);
+
     if (pay > 0.009) {
       out.push({
         from: debtors[i].uid,
@@ -539,446 +579,3 @@ function simplifyDebts(balances: Record<string, number>) {
 function round2(n: number) {
   return Math.round(n * 100) / 100;
 }
-
-const shellStyle: React.CSSProperties = {
-  display: "grid",
-  gap: 18,
-};
-
-const heroCardStyle: React.CSSProperties = {
-  position: "relative",
-  overflow: "hidden",
-  borderRadius: 28,
-  padding: 24,
-  border: "1px solid rgba(255,255,255,0.09)",
-  background:
-    "linear-gradient(135deg, rgba(59,130,246,0.16), rgba(139,92,246,0.16), rgba(15,23,42,0.95))",
-  boxShadow: "0 24px 60px rgba(0,0,0,0.35)",
-  backdropFilter: "blur(18px)",
-};
-
-const heroGlowStyle: React.CSSProperties = {
-  position: "absolute",
-  inset: -80,
-  background:
-    "radial-gradient(circle at top left, rgba(96,165,250,0.22), transparent 32%), radial-gradient(circle at bottom right, rgba(168,85,247,0.18), transparent 30%)",
-  pointerEvents: "none",
-};
-
-const eyebrowStyle: React.CSSProperties = {
-  fontSize: 12,
-  textTransform: "uppercase",
-  letterSpacing: "0.18em",
-  color: "rgba(191,219,254,0.9)",
-  fontWeight: 700,
-  marginBottom: 10,
-};
-
-const titleStyle: React.CSSProperties = {
-  margin: 0,
-  fontSize: "clamp(1.6rem, 2vw, 2.2rem)",
-  fontWeight: 800,
-  color: "#f8fafc",
-};
-
-const subtitleStyle: React.CSSProperties = {
-  margin: "8px 0 0",
-  maxWidth: 760,
-  lineHeight: 1.6,
-  color: "rgba(226,232,240,0.8)",
-  fontSize: 14,
-};
-
-const heroHeaderRowStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: 16,
-  flexWrap: "wrap",
-};
-
-const statsGridStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-  gap: 14,
-  marginTop: 20,
-};
-
-const statCardStyle: React.CSSProperties = {
-  borderRadius: 20,
-  padding: 16,
-  border: "1px solid rgba(255,255,255,0.08)",
-  background: "rgba(8,15,30,0.55)",
-  backdropFilter: "blur(12px)",
-};
-
-const statLabelStyle: React.CSSProperties = {
-  fontSize: 12,
-  color: "rgba(191,219,254,0.78)",
-  marginBottom: 8,
-};
-
-const statValueStyle: React.CSSProperties = {
-  fontSize: 24,
-  fontWeight: 800,
-  color: "#ffffff",
-};
-
-const sectionCardStyle: React.CSSProperties = {
-  borderRadius: 24,
-  padding: 20,
-  border: "1px solid rgba(255,255,255,0.08)",
-  background: "rgba(10,14,24,0.82)",
-  boxShadow: "0 18px 40px rgba(0,0,0,0.28)",
-  backdropFilter: "blur(18px)",
-};
-
-const sectionHeaderStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: 16,
-  flexWrap: "wrap",
-  marginBottom: 16,
-};
-
-const sectionEyebrowStyle: React.CSSProperties = {
-  fontSize: 11,
-  textTransform: "uppercase",
-  letterSpacing: "0.16em",
-  color: "#93c5fd",
-  fontWeight: 700,
-  marginBottom: 8,
-};
-
-const sectionTitleStyle: React.CSSProperties = {
-  margin: 0,
-  color: "#f8fafc",
-  fontSize: 20,
-  fontWeight: 800,
-};
-
-const sectionTextStyle: React.CSSProperties = {
-  margin: "8px 0 0",
-  color: "rgba(203,213,225,0.72)",
-  fontSize: 14,
-  lineHeight: 1.6,
-};
-
-const balanceGridStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-  gap: 14,
-};
-
-const balanceCardStyle: React.CSSProperties = {
-  borderRadius: 22,
-  padding: 20,
-  border: "1px solid rgba(255,255,255,0.08)",
-  background:
-    "linear-gradient(180deg, rgba(15,23,42,0.92), rgba(2,6,23,0.98))",
-  display: "grid",
-  gap: 18,
-  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
-};
-
-const balanceTopRowStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: 12,
-  alignItems: "flex-start",
-};
-
-const balanceNameStyle: React.CSSProperties = {
-  color: "#f8fafc",
-  fontWeight: 700,
-  fontSize: 16,
-};
-
-const balanceHelperStyle: React.CSSProperties = {
-  marginTop: 6,
-  color: "rgba(148,163,184,0.8)",
-  fontSize: 12,
-};
-
-const balanceValueStyle: React.CSSProperties = {
-  fontSize: 32,
-  fontWeight: 900,
-  letterSpacing: "-0.03em",
-  lineHeight: 1,
-};
-
-const pillStyle: React.CSSProperties = {
-  borderRadius: 999,
-  padding: "6px 10px",
-  fontSize: 11,
-  fontWeight: 700,
-  border: "1px solid rgba(255,255,255,0.08)",
-};
-
-const positivePillStyle: React.CSSProperties = {
-  background: "rgba(34,197,94,0.12)",
-  color: "#86efac",
-};
-
-const negativePillStyle: React.CSSProperties = {
-  background: "rgba(239,68,68,0.12)",
-  color: "#fca5a5",
-};
-
-const suggestionsGridStyle: React.CSSProperties = {
-  display: "grid",
-  gap: 16,
-};
-
-const suggestionCardStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: 18,
-  flexWrap: "wrap",
-  borderRadius: 22,
-  padding: 18,
-  border: "1px solid rgba(255,255,255,0.08)",
-  background:
-    "linear-gradient(180deg, rgba(17,24,39,0.9), rgba(2,6,23,0.96))",
-  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
-};
-
-const suggestionLeftStyle: React.CSSProperties = {
-  display: "grid",
-  gap: 8,
-  flex: "1 1 280px",
-};
-
-const suggestionRightStyle: React.CSSProperties = {
-  display: "grid",
-  gap: 12,
-  justifyItems: "end",
-  flex: "0 0 auto",
-};
-
-const suggestionLabelStyle: React.CSSProperties = {
-  fontSize: 11,
-  textTransform: "uppercase",
-  letterSpacing: "0.14em",
-  color: "#93c5fd",
-  fontWeight: 700,
-};
-
-const suggestionTitleStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 10,
-  flexWrap: "wrap",
-  color: "#f8fafc",
-  fontSize: 17,
-  fontWeight: 700,
-};
-
-const arrowStyle: React.CSSProperties = {
-  color: "rgba(148,163,184,0.9)",
-  fontWeight: 700,
-};
-
-const suggestionSubtextStyle: React.CSSProperties = {
-  color: "rgba(203,213,225,0.68)",
-  fontSize: 13,
-};
-
-const suggestionAmountStyle: React.CSSProperties = {
-  fontSize: 34,
-  fontWeight: 900,
-  color: "#ffffff",
-  lineHeight: 1,
-  letterSpacing: "-0.03em",
-};
-
-const primaryButtonStyle: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,0.12)",
-  borderRadius: 14,
-  padding: "12px 16px",
-  background:
-    "linear-gradient(135deg, rgba(59,130,246,0.95), rgba(139,92,246,0.92))",
-  color: "#ffffff",
-  fontWeight: 800,
-  cursor: "pointer",
-  boxShadow: "0 12px 30px rgba(59,130,246,0.22)",
-};
-
-const disabledButtonStyle: React.CSSProperties = {
-  opacity: 0.65,
-  cursor: "not-allowed",
-};
-
-const expensesListStyle: React.CSSProperties = {
-  display: "grid",
-  gap: 18,
-};
-
-const expenseCardStyle: React.CSSProperties = {
-  borderRadius: 24,
-  padding: 20,
-  border: "1px solid rgba(255,255,255,0.08)",
-  background:
-    "linear-gradient(180deg, rgba(15,23,42,0.86), rgba(2,6,23,0.98))",
-  display: "grid",
-  gap: 18,
-  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
-};
-
-const expenseHeaderStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "flex-start",
-  gap: 16,
-  flexWrap: "wrap",
-};
-
-const expenseMainStyle: React.CSSProperties = {
-  display: "grid",
-  gap: 10,
-  flex: "1 1 380px",
-};
-
-const expenseActionWrapStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "flex-start",
-  justifyContent: "flex-end",
-};
-
-const expenseTitleStyle: React.CSSProperties = {
-  fontSize: 19,
-  fontWeight: 800,
-  color: "#f8fafc",
-};
-
-const expenseMetaWrapStyle: React.CSSProperties = {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: 8,
-};
-
-const metaChipStyle: React.CSSProperties = {
-  borderRadius: 999,
-  padding: "8px 12px",
-  fontSize: 12,
-  color: "#cbd5e1",
-  background: "rgba(255,255,255,0.05)",
-  border: "1px solid rgba(255,255,255,0.06)",
-};
-
-const myNetBadgeStyle: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  width: "fit-content",
-  borderRadius: 999,
-  padding: "10px 14px",
-  fontSize: 13,
-  fontWeight: 700,
-  marginTop: 2,
-  border: "1px solid rgba(255,255,255,0.08)",
-};
-
-const positiveNetStyle: React.CSSProperties = {
-  background: "rgba(34,197,94,0.12)",
-  color: "#86efac",
-};
-
-const negativeNetStyle: React.CSSProperties = {
-  background: "rgba(239,68,68,0.12)",
-  color: "#fca5a5",
-};
-
-const neutralNetStyle: React.CSSProperties = {
-  background: "rgba(148,163,184,0.12)",
-  color: "#cbd5e1",
-};
-
-const splitPanelStyle: React.CSSProperties = {
-  borderRadius: 18,
-  padding: 16,
-  border: "1px solid rgba(255,255,255,0.07)",
-  background: "rgba(255,255,255,0.04)",
-  display: "grid",
-  gap: 12,
-};
-
-const splitPanelHeaderStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: 12,
-  alignItems: "center",
-  flexWrap: "wrap",
-};
-
-const splitPanelTitleStyle: React.CSSProperties = {
-  color: "#e2e8f0",
-  fontWeight: 800,
-  fontSize: 14,
-};
-
-const splitPanelHintStyle: React.CSSProperties = {
-  color: "rgba(148,163,184,0.78)",
-  fontSize: 12,
-};
-
-const splitGridStyle: React.CSSProperties = {
-  display: "grid",
-  gap: 10,
-};
-
-const splitRowStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: 12,
-  alignItems: "center",
-  padding: "12px 14px",
-  borderRadius: 14,
-  background: "rgba(2,6,23,0.62)",
-  border: "1px solid rgba(255,255,255,0.05)",
-};
-
-const splitNameStyle: React.CSSProperties = {
-  color: "#dbeafe",
-  fontSize: 14,
-};
-
-const splitAmountStyle: React.CSSProperties = {
-  color: "#ffffff",
-  fontWeight: 700,
-};
-
-const emptyStateStyle: React.CSSProperties = {
-  borderRadius: 28,
-  padding: 28,
-  border: "1px solid rgba(255,255,255,0.08)",
-  background:
-    "linear-gradient(180deg, rgba(15,23,42,0.82), rgba(2,6,23,0.96))",
-  textAlign: "center",
-};
-
-const emptyIconStyle: React.CSSProperties = {
-  fontSize: 34,
-  marginBottom: 12,
-};
-
-const emptyTitleStyle: React.CSSProperties = {
-  margin: 0,
-  color: "#f8fafc",
-  fontSize: 22,
-  fontWeight: 800,
-};
-
-const emptyTextStyle: React.CSSProperties = {
-  margin: "10px auto 0",
-  maxWidth: 520,
-  color: "rgba(203,213,225,0.72)",
-  lineHeight: 1.6,
-};
-
-const emptyInnerCardStyle: React.CSSProperties = {
-  borderRadius: 18,
-  padding: 18,
-  border: "1px solid rgba(255,255,255,0.07)",
-  background: "rgba(255,255,255,0.03)",
-  color: "rgba(203,213,225,0.78)",
-};

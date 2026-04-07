@@ -8,6 +8,7 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  limit,
   onSnapshot,
   orderBy,
   query,
@@ -34,6 +35,9 @@ type Message = {
   editedAt?: any;
 };
 
+const MOBILE_BREAKPOINT = 900;
+const MESSAGE_LIMIT = 80;
+
 export default function ChatPanel() {
   const [uid, setUid] = useState<string | null>(null);
   const [groupId, setGroupId] = useState<string | null>(null);
@@ -50,6 +54,11 @@ export default function ChatPanel() {
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const messagesAreaRef = useRef<HTMLDivElement | null>(null);
+  const prevMessageCountRef = useRef(0);
+
+  const isMobile =
+    typeof window !== "undefined" ? window.innerWidth <= MOBILE_BREAKPOINT : false;
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
@@ -84,14 +93,17 @@ export default function ChatPanel() {
 
     const q = query(
       collection(db, "groups", groupId, "messages"),
-      orderBy("createdAt", "asc")
+      orderBy("createdAt", "desc"),
+      limit(MESSAGE_LIMIT)
     );
 
     const unsub = onSnapshot(q, (snapshot) => {
-      const items = snapshot.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-      })) as Message[];
+      const items = snapshot.docs
+        .map((d) => ({
+          id: d.id,
+          ...d.data(),
+        }))
+        .reverse() as Message[];
 
       setMessages(items);
     });
@@ -100,14 +112,18 @@ export default function ChatPanel() {
   }, [groupId]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    if (!messagesAreaRef.current) return;
 
-  useEffect(() => {
-    const closeMenu = () => setOpenMenuId(null);
-    window.addEventListener("click", closeMenu);
-    return () => window.removeEventListener("click", closeMenu);
-  }, []);
+    const hasNewMessage = messages.length > prevMessageCountRef.current;
+    prevMessageCountRef.current = messages.length;
+
+    if (!hasNewMessage) return;
+
+    bottomRef.current?.scrollIntoView({
+      behavior: isMobile ? "auto" : "smooth",
+      block: "end",
+    });
+  }, [messages, isMobile]);
 
   const formatTime = (timestamp?: Timestamp) => {
     if (!timestamp) return "";
@@ -117,6 +133,14 @@ export default function ChatPanel() {
       hour: "numeric",
       minute: "2-digit",
     });
+  };
+
+  const resetComposer = () => {
+    setText("");
+    setFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
   const sendMessage = async () => {
@@ -130,8 +154,8 @@ export default function ChatPanel() {
       let imagePath = "";
 
       if (file) {
-        const fileName = `${Date.now()}-${file.name}`;
-        imagePath = `chatImages/${groupId}/${fileName}`;
+        const safeName = `${Date.now()}-${file.name}`;
+        imagePath = `chatImages/${groupId}/${safeName}`;
         const storageRef = ref(storage, imagePath);
 
         await uploadBytes(storageRef, file);
@@ -147,12 +171,7 @@ export default function ChatPanel() {
         createdAt: serverTimestamp(),
       });
 
-      setText("");
-      setFile(null);
-
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
+      resetComposer();
     } catch (error) {
       console.error("Error sending message:", error);
       alert("Failed to send message.");
@@ -221,15 +240,23 @@ export default function ChatPanel() {
     setOpenMenuId(null);
   };
 
-  if (loading) return <div style={{ padding: 10, opacity: 0.7 }}>Loading your data...</div>;
-  if (!uid) return <div style={{ padding: 10 }}>Please log in first.</div>;
-  if (!groupId) return <div style={{ padding: 10 }}>You are not in a room yet.</div>;
+  if (loading) {
+    return <div style={{ padding: 10, opacity: 0.7 }}>Loading your data...</div>;
+  }
+
+  if (!uid) {
+    return <div style={{ padding: 10 }}>Please log in first.</div>;
+  }
+
+  if (!groupId) {
+    return <div style={{ padding: 10 }}>You are not in a room yet.</div>;
+  }
 
   return (
-    <div style={{ display: "grid", gap: 18 }}>
+    <div style={{ display: "grid", gap: 18, minWidth: 0 }}>
       <div>
-        <h2 style={{ margin: 0, fontSize: 28 }}>Room Chat</h2>
-        <div style={{ marginTop: 6, color: "rgba(255,255,255,0.68)" }}>
+        <h2 style={chatTitleStyle}>Room Chat</h2>
+        <div style={chatSubtitleStyle}>
           Stay connected with your roommates in one shared space.
         </div>
       </div>
@@ -241,16 +268,24 @@ export default function ChatPanel() {
             <div style={subtleTextStyle}>
               {messages.length === 0
                 ? "No messages yet"
-                : `${messages.length} message${messages.length === 1 ? "" : "s"}`}
+                : `${messages.length} recent message${
+                    messages.length === 1 ? "" : "s"
+                  }`}
             </div>
           </div>
         </div>
 
-        <div style={messagesAreaStyle}>
+        <div
+          ref={messagesAreaRef}
+          style={messagesAreaStyle}
+          onClick={() => setOpenMenuId(null)}
+        >
           {messages.length === 0 ? (
             <div style={emptyChatStateStyle}>
               <div style={{ fontSize: 40 }}>💬</div>
-              <p style={{ fontSize: 18, margin: 0, fontWeight: 700 }}>No messages yet</p>
+              <p style={{ fontSize: 18, margin: 0, fontWeight: 700 }}>
+                No messages yet
+              </p>
               <p style={{ fontSize: 13, margin: 0, opacity: 0.72 }}>
                 Start the conversation with your roommates!
               </p>
@@ -272,9 +307,6 @@ export default function ChatPanel() {
                     style={{
                       ...bubbleStyle,
                       ...(isMe ? myBubbleStyle : theirBubbleStyle),
-                      boxShadow: isMe
-                        ? "0 4px 12px rgba(34,197,94,0.2)"
-                        : "0 4px 12px rgba(0,0,0,0.3)",
                     }}
                   >
                     <div style={bubbleTopStyle}>
@@ -284,10 +316,11 @@ export default function ChatPanel() {
 
                       {isMe && (
                         <div
-                          style={{ position: "relative" }}
+                          style={{ position: "relative", flexShrink: 0 }}
                           onClick={(e) => e.stopPropagation()}
                         >
                           <button
+                            type="button"
                             onClick={() =>
                               setOpenMenuId(openMenuId === msg.id ? null : msg.id)
                             }
@@ -299,6 +332,7 @@ export default function ChatPanel() {
                           {openMenuId === msg.id && (
                             <div style={menuCardStyle}>
                               <button
+                                type="button"
                                 onClick={() => startEdit(msg)}
                                 style={menuBtnStyle}
                               >
@@ -306,14 +340,12 @@ export default function ChatPanel() {
                               </button>
 
                               <button
+                                type="button"
                                 onClick={() => {
                                   deleteMessage(msg);
                                   setOpenMenuId(null);
                                 }}
-                                style={{
-                                  ...menuBtnStyle,
-                                  color: "#fca5a5",
-                                }}
+                                style={{ ...menuBtnStyle, color: "#fca5a5" }}
                               >
                                 Delete
                               </button>
@@ -331,12 +363,20 @@ export default function ChatPanel() {
                           rows={2}
                           style={editTextareaStyle}
                         />
-                        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                          <button onClick={() => saveEdit(msg)} style={saveBtnStyle}>
+                        <div style={editActionRowStyle}>
+                          <button
+                            type="button"
+                            onClick={() => saveEdit(msg)}
+                            style={saveBtnStyle}
+                          >
                             Save
                           </button>
 
-                          <button onClick={cancelEdit} style={cancelBtnStyle}>
+                          <button
+                            type="button"
+                            onClick={cancelEdit}
+                            style={cancelBtnStyle}
+                          >
                             Cancel
                           </button>
                         </div>
@@ -344,15 +384,7 @@ export default function ChatPanel() {
                     ) : (
                       <>
                         {msg.text && (
-                          <p
-                            style={{
-                              margin: "6px 0 0 0",
-                              lineHeight: "1.6",
-                              whiteSpace: "pre-wrap",
-                            }}
-                          >
-                            {msg.text}
-                          </p>
+                          <p style={messageTextStyle}>{msg.text}</p>
                         )}
                       </>
                     )}
@@ -367,6 +399,8 @@ export default function ChatPanel() {
                         <img
                           src={msg.imageUrl}
                           alt="chat upload"
+                          loading="lazy"
+                          decoding="async"
                           style={chatImageStyle}
                         />
                       </a>
@@ -427,6 +461,7 @@ export default function ChatPanel() {
 
           <div style={{ display: "flex", justifyContent: "flex-end" }}>
             <button
+              type="button"
               onClick={sendMessage}
               disabled={sending || (!text.trim() && !file)}
               style={{
@@ -445,15 +480,28 @@ export default function ChatPanel() {
   );
 }
 
+const chatTitleStyle: React.CSSProperties = {
+  margin: 0,
+  fontSize: "clamp(22px, 4vw, 28px)",
+};
+
+const chatSubtitleStyle: React.CSSProperties = {
+  marginTop: 6,
+  color: "rgba(255,255,255,0.68)",
+  fontSize: 14,
+  lineHeight: 1.5,
+};
+
 const chatShellStyle: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,0.08)",
   borderRadius: 24,
-  padding: 18,
+  padding: "clamp(14px, 3vw, 18px)",
   background:
     "linear-gradient(180deg, rgba(8,13,28,0.88) 0%, rgba(10,16,34,0.82) 100%)",
   boxShadow: "0 18px 38px rgba(0,0,0,0.20)",
   display: "grid",
   gap: 16,
+  minWidth: 0,
 };
 
 const chatHeaderStyle: React.CSSProperties = {
@@ -461,6 +509,7 @@ const chatHeaderStyle: React.CSSProperties = {
   justifyContent: "space-between",
   alignItems: "center",
   gap: 12,
+  minWidth: 0,
 };
 
 const chatSectionTitleStyle: React.CSSProperties = {
@@ -471,21 +520,26 @@ const chatSectionTitleStyle: React.CSSProperties = {
 const subtleTextStyle: React.CSSProperties = {
   fontSize: 13,
   color: "rgba(255,255,255,0.66)",
+  lineHeight: 1.5,
 };
 
 const messagesAreaStyle: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,0.08)",
   borderRadius: 20,
-  padding: 16,
-  minHeight: 500,
-  maxHeight: 500,
+  padding: 12,
+  minHeight: 340,
+  maxHeight: "58vh",
   overflowY: "auto",
+  overflowX: "hidden",
   background:
     "linear-gradient(180deg, rgba(5,10,20,0.96) 0%, rgba(8,14,26,0.94) 100%)",
+  minWidth: 0,
+  WebkitOverflowScrolling: "touch",
+  overscrollBehavior: "contain",
 };
 
 const emptyChatStateStyle: React.CSSProperties = {
-  minHeight: 420,
+  minHeight: 260,
   display: "grid",
   placeItems: "center",
   textAlign: "center",
@@ -495,14 +549,20 @@ const emptyChatStateStyle: React.CSSProperties = {
 
 const bubbleStyle: React.CSSProperties = {
   position: "relative",
-  maxWidth: "72%",
+  width: "fit-content",
+  maxWidth: "92%",
   borderRadius: 18,
   padding: "14px 14px 12px",
   border: "1px solid rgba(255,255,255,0.08)",
+  minWidth: 0,
+  wordBreak: "break-word",
+  overflowWrap: "anywhere",
+  boxShadow: "0 4px 12px rgba(0,0,0,0.22)",
 };
 
 const myBubbleStyle: React.CSSProperties = {
-  background: "linear-gradient(135deg, rgba(59,130,246,0.22), rgba(99,102,241,0.18))",
+  background:
+    "linear-gradient(135deg, rgba(59,130,246,0.22), rgba(99,102,241,0.18))",
 };
 
 const theirBubbleStyle: React.CSSProperties = {
@@ -519,6 +579,7 @@ const bubbleTopStyle: React.CSSProperties = {
 const bubbleNameStyle: React.CSSProperties = {
   fontWeight: 800,
   fontSize: 14,
+  wordBreak: "break-word",
 };
 
 const menuTriggerStyle: React.CSSProperties = {
@@ -528,12 +589,15 @@ const menuTriggerStyle: React.CSSProperties = {
   fontSize: 18,
   cursor: "pointer",
   lineHeight: 1,
-  padding: 0,
+  padding: "2px 6px",
+  borderRadius: 8,
+  WebkitTapHighlightColor: "transparent",
+  touchAction: "manipulation",
 };
 
 const menuCardStyle: React.CSSProperties = {
   position: "absolute",
-  top: 24,
+  top: 28,
   right: 0,
   background: "rgba(10,16,30,0.98)",
   border: "1px solid rgba(255,255,255,0.10)",
@@ -554,6 +618,8 @@ const menuBtnStyle: React.CSSProperties = {
   textAlign: "left",
   cursor: "pointer",
   fontWeight: 600,
+  WebkitTapHighlightColor: "transparent",
+  touchAction: "manipulation",
 };
 
 const editTextareaStyle: React.CSSProperties = {
@@ -565,6 +631,14 @@ const editTextareaStyle: React.CSSProperties = {
   color: "white",
   resize: "vertical",
   outline: "none",
+  boxSizing: "border-box",
+};
+
+const editActionRowStyle: React.CSSProperties = {
+  display: "flex",
+  gap: 8,
+  marginTop: 10,
+  flexWrap: "wrap",
 };
 
 const saveBtnStyle: React.CSSProperties = {
@@ -575,6 +649,8 @@ const saveBtnStyle: React.CSSProperties = {
   color: "#dcfce7",
   cursor: "pointer",
   fontWeight: 700,
+  WebkitTapHighlightColor: "transparent",
+  touchAction: "manipulation",
 };
 
 const cancelBtnStyle: React.CSSProperties = {
@@ -585,6 +661,17 @@ const cancelBtnStyle: React.CSSProperties = {
   color: "white",
   cursor: "pointer",
   fontWeight: 700,
+  WebkitTapHighlightColor: "transparent",
+  touchAction: "manipulation",
+};
+
+const messageTextStyle: React.CSSProperties = {
+  margin: "6px 0 0 0",
+  lineHeight: 1.6,
+  whiteSpace: "pre-wrap",
+  wordBreak: "break-word",
+  overflowWrap: "anywhere",
+  fontSize: 14,
 };
 
 const chatImageStyle: React.CSSProperties = {
@@ -604,10 +691,11 @@ const timestampStyle: React.CSSProperties = {
 const composerStyle: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,0.08)",
   borderRadius: 20,
-  padding: 16,
+  padding: "clamp(12px, 3vw, 16px)",
   background: "rgba(255,255,255,0.03)",
   display: "grid",
   gap: 14,
+  minWidth: 0,
 };
 
 const composerTextareaStyle: React.CSSProperties = {
@@ -619,6 +707,8 @@ const composerTextareaStyle: React.CSSProperties = {
   background: "rgba(5,10,20,0.92)",
   color: "white",
   outline: "none",
+  minHeight: 100,
+  boxSizing: "border-box",
 };
 
 const fileRowStyle: React.CSSProperties = {
@@ -626,10 +716,13 @@ const fileRowStyle: React.CSSProperties = {
   gap: 12,
   alignItems: "center",
   flexWrap: "wrap",
+  flexDirection: "column",
 };
 
 const fileInputStyle: React.CSSProperties = {
   color: "white",
+  maxWidth: "100%",
+  width: "100%",
 };
 
 const fileChipStyle: React.CSSProperties = {
@@ -638,6 +731,9 @@ const fileChipStyle: React.CSSProperties = {
   background: "rgba(59,130,246,0.14)",
   border: "1px solid rgba(96,165,250,0.20)",
   fontSize: 13,
+  wordBreak: "break-word",
+  width: "100%",
+  boxSizing: "border-box",
 };
 
 const sendBtnStyle: React.CSSProperties = {
@@ -649,4 +745,7 @@ const sendBtnStyle: React.CSSProperties = {
   fontWeight: 800,
   boxShadow: "0 8px 20px rgba(37,99,235,0.3)",
   transition: "all 0.2s ease",
+  width: "100%",
+  WebkitTapHighlightColor: "transparent",
+  touchAction: "manipulation",
 };
