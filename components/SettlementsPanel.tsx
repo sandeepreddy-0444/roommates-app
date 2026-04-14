@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import {
-  addDoc,
   collection,
   doc,
   getDoc,
@@ -22,6 +21,7 @@ type Expense = {
   amount: number;
   splitMap?: Record<string, number>;
   participants?: string[];
+  visibleTo?: string[];
   paidByUid?: string;
   createdByUid?: string;
   settled?: boolean;
@@ -37,11 +37,16 @@ type Suggestion = {
 
 const EXPENSE_LIMIT = 200;
 
+function uniqueIds(ids: string[]) {
+  return Array.from(new Set(ids.filter(Boolean)));
+}
+
 export default function SettlementsPanel() {
   const [uid, setUid] = useState<string | null>(null);
   const [groupId, setGroupId] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [users, setUsers] = useState<UserMap>({});
-  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [allExpenses, setAllExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
 
@@ -58,6 +63,15 @@ export default function SettlementsPanel() {
       const userData = userSnap.exists() ? (userSnap.data() as any) : {};
       const gid = userData?.groupId || null;
       setGroupId(gid);
+
+      if (gid) {
+        const groupSnap = await getDoc(doc(db, "groups", gid));
+        const groupData = groupSnap.exists() ? (groupSnap.data() as any) : {};
+        setIsAdmin(groupData?.createdBy === u.uid);
+      } else {
+        setIsAdmin(false);
+      }
+
       setLoading(false);
     });
 
@@ -105,17 +119,38 @@ export default function SettlementsPanel() {
           amount: Number(data?.amount || 0),
           splitMap: data?.splitMap || {},
           participants: Array.isArray(data?.participants) ? data.participants : [],
+          visibleTo: Array.isArray(data?.visibleTo) ? data.visibleTo : [],
           paidByUid: data?.paidByUid || data?.createdByUid || null,
           createdByUid: data?.createdByUid || null,
           settled: !!data?.settled,
         };
       });
 
-      setExpenses(rows);
+      setAllExpenses(rows);
     });
 
     return () => unsub();
   }, [groupId]);
+
+  function canViewExpense(exp: Expense) {
+    if (!uid) return false;
+
+    const payer = exp.paidByUid || exp.createdByUid || null;
+    const visibleTo =
+      Array.isArray(exp.visibleTo) && exp.visibleTo.length > 0
+        ? exp.visibleTo
+        : uniqueIds([
+            ...(Array.isArray(exp.participants) ? exp.participants : []),
+            payer || "",
+          ]);
+
+    return visibleTo.includes(uid);
+  }
+
+  const expenses = useMemo(
+    () => allExpenses.filter(canViewExpense),
+    [allExpenses, uid]
+  );
 
   const balances = useMemo(() => {
     const map: Record<string, number> = {};
@@ -149,10 +184,22 @@ export default function SettlementsPanel() {
     [unsettledExpenses]
   );
 
-  const peopleCount = Object.keys(users).length;
+  const peopleCount = useMemo(() => {
+    const ids = new Set<string>();
+    for (const exp of unsettledExpenses) {
+      (exp.participants || []).forEach((id) => ids.add(id));
+      const payer = exp.paidByUid || exp.createdByUid;
+      if (payer) ids.add(payer);
+    }
+    return ids.size;
+  }, [unsettledExpenses]);
 
   async function markExpenseSettled(expenseId: string) {
     if (!groupId) return;
+
+    const ok = confirm("Are you sure you want to mark this expense as settled?");
+    if (!ok) return;
+
     setSavingId(expenseId);
 
     try {
@@ -160,39 +207,6 @@ export default function SettlementsPanel() {
         settled: true,
         settledAt: serverTimestamp(),
       });
-    } finally {
-      setSavingId(null);
-    }
-  }
-
-  async function saveSuggestion(s: Suggestion) {
-    if (!groupId || !uid) return;
-
-    const saveKey = `${s.from}-${s.to}-${s.amount}`;
-    setSavingId(saveKey);
-
-    try {
-      await addDoc(collection(db, "groups", groupId, "settlements"), {
-        fromUid: s.from,
-        toUid: s.to,
-        amount: round2(s.amount),
-        createdAt: serverTimestamp(),
-        createdBy: uid,
-        status: "pending",
-      });
-
-      await addDoc(collection(db, "groups", groupId, "notifications"), {
-        type: "settlement",
-        title: "Settlement suggestion created",
-        body: `${users[s.from] || "Someone"} should pay $${round2(s.amount).toFixed(
-          2
-        )} to ${users[s.to] || "someone"}`,
-        createdAt: serverTimestamp(),
-        createdBy: uid,
-        readBy: [],
-      });
-
-      alert("Settlement suggestion saved ✅");
     } finally {
       setSavingId(null);
     }
@@ -214,145 +228,96 @@ export default function SettlementsPanel() {
     return {
       payer,
       perPerson,
-      myShare,
-      myPaid,
       myNet,
-      people,
     };
   }
 
   if (loading) {
-    return (
-      <div className="grid gap-4">
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 sm:p-5">
-          <div className="text-xs uppercase tracking-[0.18em] text-sky-200/90 font-bold">
-            Settlements
-          </div>
-          <h2 className="mt-2 text-xl sm:text-2xl font-bold text-white">
-            Loading settlements...
-          </h2>
-          <p className="mt-2 text-sm text-white/70">
-            Preparing your room balance overview.
-          </p>
-        </div>
-      </div>
-    );
+    return <div style={loadingStyle}>Loading settlements...</div>;
   }
 
   if (!groupId) {
     return (
-      <div className="grid gap-4">
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-center">
-          <div className="text-3xl mb-3">🏠</div>
-          <h2 className="text-xl sm:text-2xl font-bold text-white">
-            You are not in a room yet
-          </h2>
-          <p className="mt-2 text-sm text-white/70 max-w-xl mx-auto leading-6">
-            Join or create a room to view balances, settlement plans, and shared
-            expense activity.
-          </p>
+      <div style={emptyWrapStyle}>
+        <div style={emptyTitleStyle}>You are not in a room yet</div>
+        <div style={emptyTextStyle}>
+          Join or create a room to view balances and settlements.
         </div>
       </div>
     );
   }
 
   return (
-    <div className="grid gap-4 min-w-0 text-white">
-      <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 sm:p-5">
-        <div className="text-xs uppercase tracking-[0.18em] text-sky-200/90 font-bold">
-          Smart Settlements
-        </div>
+    <div style={pageStyle}>
+      <section style={sectionStyle}>
+        <div style={sectionEyebrowStyle}>Smart Settlements</div>
+        <div style={sectionTitleStyle}>Visible summary</div>
 
-        <h2 className="mt-2 text-xl sm:text-2xl font-bold break-words">
-          Balance the room faster
-        </h2>
-
-        <p className="mt-2 text-sm text-white/70 leading-6 max-w-3xl">
-          See who is owed, who owes, and the simplest plan to settle everything
-          with fewer transactions.
-        </p>
-
-        <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-            <div className="text-[11px] text-white/65">Unsettled Expenses</div>
-            <div className="mt-1 text-xl sm:text-2xl font-bold">
-              {unsettledExpenses.length}
-            </div>
+        <div style={statsGridStyle}>
+          <div style={statCardStyle}>
+            <div style={statLabelStyle}>Unsettled</div>
+            <div style={statValueStyle}>{unsettledExpenses.length}</div>
           </div>
 
-          <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-            <div className="text-[11px] text-white/65">Pending Value</div>
-            <div className="mt-1 text-xl sm:text-2xl font-bold break-words">
+          <div style={statCardStyle}>
+            <div style={statLabelStyle}>Pending</div>
+            <div style={statValueStyle}>
               ${round2(totalUnsettledAmount).toFixed(2)}
             </div>
           </div>
 
-          <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-            <div className="text-[11px] text-white/65">Roommates</div>
-            <div className="mt-1 text-xl sm:text-2xl font-bold">{peopleCount}</div>
+          <div style={statCardStyle}>
+            <div style={statLabelStyle}>Members</div>
+            <div style={statValueStyle}>{peopleCount}</div>
           </div>
 
-          <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-            <div className="text-[11px] text-white/65">Best Plan Steps</div>
-            <div className="mt-1 text-xl sm:text-2xl font-bold">
-              {suggestions.length}
-            </div>
+          <div style={statCardStyle}>
+            <div style={statLabelStyle}>Best steps</div>
+            <div style={statValueStyle}>{suggestions.length}</div>
           </div>
         </div>
       </section>
 
-      <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 sm:p-5">
-        <div className="mb-4">
-          <div className="text-[11px] uppercase tracking-[0.16em] text-sky-300 font-bold">
-            Overview
-          </div>
-          <h3 className="mt-2 text-lg sm:text-xl font-bold">Current balances</h3>
-          <p className="mt-1 text-sm text-white/70 leading-6">
-            These balances reflect all unsettled shared expenses in the room.
-          </p>
-        </div>
+      <section style={sectionStyle}>
+        <div style={sectionEyebrowStyle}>Overview</div>
+        <div style={sectionTitleStyle}>Current balances</div>
 
-        {Object.keys(users).length === 0 ? (
-          <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-white/70">
-            No roommates found.
-          </div>
+        {Object.keys(balances).length === 0 ? (
+          <div style={emptyMiniStyle}>No visible balances right now.</div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-            {Object.entries(users).map(([personUid, name]) => {
-              const value = balances[personUid] || 0;
+          <div style={cardsGridStyle}>
+            {Object.entries(balances).map(([personUid, value]) => {
               const positive = value >= 0;
+              const name = users[personUid] || "Someone";
 
               return (
-                <div
-                  key={personUid}
-                  className="rounded-xl border border-white/10 bg-black/20 p-4"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="font-semibold break-words">
+                <div key={personUid} style={balanceCardStyle}>
+                  <div style={balanceTopStyle}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={balanceNameStyle}>
                         {name}
                         {uid === personUid ? " (You)" : ""}
                       </div>
-                      <div className="mt-1 text-xs text-white/60">
+                      <div style={balanceSubStyle}>
                         {positive ? "Should receive" : "Needs to pay"}
                       </div>
                     </div>
 
                     <div
-                      className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold border ${
-                        positive
-                          ? "bg-green-500/10 text-green-300 border-green-400/20"
-                          : "bg-red-500/10 text-red-300 border-red-400/20"
-                      }`}
+                      style={{
+                        ...pillStyle,
+                        ...(positive ? creditPillStyle : debitPillStyle),
+                      }}
                     >
                       {positive ? "Credit" : "Debit"}
                     </div>
                   </div>
 
                   <div
-                    className={`mt-4 text-2xl sm:text-3xl font-extrabold break-words ${
-                      positive ? "text-green-300" : "text-red-300"
-                    }`}
+                    style={{
+                      ...balanceValueStyle,
+                      color: positive ? "#86efac" : "#fca5a5",
+                    }}
                   >
                     {value >= 0 ? "+" : "-"}${Math.abs(round2(value)).toFixed(2)}
                   </div>
@@ -363,174 +328,95 @@ export default function SettlementsPanel() {
         )}
       </section>
 
-      <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 sm:p-5">
-        <div className="mb-4">
-          <div className="text-[11px] uppercase tracking-[0.16em] text-sky-300 font-bold">
-            Optimization
-          </div>
-          <h3 className="mt-2 text-lg sm:text-xl font-bold">
-            Best settlement plan
-          </h3>
-          <p className="mt-1 text-sm text-white/70 leading-6">
-            We simplify debt paths so the room can settle with fewer payments.
-          </p>
-        </div>
+      <section style={sectionStyle}>
+        <div style={sectionEyebrowStyle}>Best plan</div>
+        <div style={sectionTitleStyle}>Who should pay whom</div>
 
         {suggestions.length === 0 ? (
-          <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-white/70">
-            Everything is already balanced 🎉
-          </div>
+          <div style={emptyMiniStyle}>Everything visible to you is balanced 🎉</div>
         ) : (
-          <div className="grid gap-3">
-            {suggestions.map((s, index) => {
-              const id = `${s.from}-${s.to}-${s.amount}`;
-
-              return (
-                <div
-                  key={index}
-                  className="rounded-xl border border-white/10 bg-black/20 p-4"
-                >
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="min-w-0">
-                      <div className="text-[11px] uppercase tracking-[0.14em] text-sky-300 font-bold">
-                        Suggested payment
-                      </div>
-
-                      <div className="mt-2 flex flex-wrap items-center gap-2 text-base sm:text-lg font-semibold break-words">
-                        <strong>{users[s.from] || "Someone"}</strong>
-                        <span className="text-white/60">→</span>
-                        <strong>{users[s.to] || "Someone"}</strong>
-                      </div>
-
-                      <div className="mt-2 text-sm text-white/65">
-                        Settle this balance in one payment.
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col gap-3 lg:items-end">
-                      <div className="text-2xl sm:text-3xl font-extrabold break-words">
-                        ${round2(s.amount).toFixed(2)}
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => saveSuggestion(s)}
-                        disabled={savingId === id}
-                        className="w-full lg:w-auto min-h-[46px] rounded-xl border border-white/15 bg-blue-500/90 px-4 py-3 font-semibold text-white disabled:opacity-60"
-                      >
-                        {savingId === id ? "Saving..." : "Save Suggestion"}
-                      </button>
-                    </div>
-                  </div>
+          <div style={cardsListStyle}>
+            {suggestions.map((s, index) => (
+              <div
+                key={`${s.from}-${s.to}-${s.amount}-${index}`}
+                style={simpleCardStyle}
+              >
+                <div style={settlementLineStyle}>
+                  <strong>{users[s.from] || "Someone"}</strong>
+                  <span style={{ opacity: 0.65 }}>→</span>
+                  <strong>{users[s.to] || "Someone"}</strong>
                 </div>
-              );
-            })}
+
+                <div style={settlementAmountStyle}>
+                  ${round2(s.amount).toFixed(2)}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </section>
 
-      <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 sm:p-5">
-        <div className="mb-4">
-          <div className="text-[11px] uppercase tracking-[0.16em] text-sky-300 font-bold">
-            Expenses
-          </div>
-          <h3 className="mt-2 text-lg sm:text-xl font-bold">
-            Unsettled expenses
-          </h3>
-          <p className="mt-1 text-sm text-white/70 leading-6">
-            Review expense splits and close items once everyone is settled.
-          </p>
-        </div>
+      <section style={sectionStyle}>
+        <div style={sectionEyebrowStyle}>Expenses</div>
+        <div style={sectionTitleStyle}>Unsettled expenses</div>
 
         {unsettledExpenses.length === 0 ? (
-          <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-white/70">
-            No unsettled expenses.
-          </div>
+          <div style={emptyMiniStyle}>No visible unsettled expenses.</div>
         ) : (
-          <div className="grid gap-4">
+          <div style={cardsListStyle}>
             {unsettledExpenses.map((e) => {
               const details = getExpenseDetails(e);
+              const canSettle =
+                !!uid && (details.payer === uid || isAdmin);
 
               return (
-                <div
-                  key={e.id}
-                  className="rounded-xl border border-white/10 bg-black/20 p-4"
-                >
-                  <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                    <div className="min-w-0 flex-1">
-                      <div className="text-lg font-bold break-words">{e.title}</div>
+                <div key={e.id} style={simpleCardStyle}>
+                  <div style={expenseTitleStyle}>{e.title}</div>
 
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-white/75">
-                          Total: ${Number(e.amount || 0).toFixed(2)}
-                        </div>
-                        <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-white/75">
-                          Each share: ${details.perPerson.toFixed(2)}
-                        </div>
-                        <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-white/75 break-words">
-                          Paid by: {users[details.payer || ""] || "Unknown"}
-                          {details.payer === uid ? " (You)" : ""}
-                        </div>
-                      </div>
-
-                      {uid && (
-                        <div
-                          className={`mt-3 inline-flex rounded-full border px-3 py-2 text-xs sm:text-sm font-semibold ${
-                            details.myNet > 0
-                              ? "bg-green-500/10 text-green-300 border-green-400/20"
-                              : details.myNet < 0
-                              ? "bg-red-500/10 text-red-300 border-red-400/20"
-                              : "bg-white/5 text-white/75 border-white/10"
-                          }`}
-                        >
-                          {details.myNet > 0
-                            ? `You should receive $${details.myNet.toFixed(2)}`
-                            : details.myNet < 0
-                            ? `You owe $${Math.abs(details.myNet).toFixed(2)}`
-                            : "You are settled for this expense"}
-                        </div>
-                      )}
+                  <div style={chipRowStyle}>
+                    <div style={chipStyle}>
+                      Total: ${Number(e.amount || 0).toFixed(2)}
                     </div>
-
-                    <div className="w-full xl:w-auto">
-                      <button
-                        type="button"
-                        onClick={() => markExpenseSettled(e.id)}
-                        disabled={savingId === e.id}
-                        className="w-full xl:w-auto min-h-[46px] rounded-xl border border-white/15 bg-blue-500/90 px-4 py-3 font-semibold text-white disabled:opacity-60"
-                      >
-                        {savingId === e.id ? "Saving..." : "Mark Settled"}
-                      </button>
+                    <div style={chipStyle}>Each: ${details.perPerson.toFixed(2)}</div>
+                    <div style={chipStyle}>
+                      Paid by: {users[details.payer || ""] || "Unknown"}
+                      {details.payer === uid ? " (You)" : ""}
                     </div>
                   </div>
 
-                  <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="font-semibold text-sm text-slate-200">
-                        Split details
-                      </div>
-                      <div className="text-xs text-white/55">
-                        Individual share breakdown
-                      </div>
+                  {uid ? (
+                    <div
+                      style={{
+                        ...statusStyle,
+                        ...(details.myNet > 0
+                          ? receiveStyle
+                          : details.myNet < 0
+                          ? oweStyle
+                          : settledStyle),
+                      }}
+                    >
+                      {details.myNet > 0
+                        ? `You should receive $${details.myNet.toFixed(2)}`
+                        : details.myNet < 0
+                        ? `You owe $${Math.abs(details.myNet).toFixed(2)}`
+                        : "You are settled"}
                     </div>
+                  ) : null}
 
-                    <div className="mt-3 grid gap-2">
-                      {Object.entries(e.splitMap || {}).map(([personUid, owed]) => (
-                        <div
-                          key={personUid}
-                          className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-black/20 px-3 py-2"
-                        >
-                          <div className="text-sm text-sky-100 break-words min-w-0">
-                            {users[personUid] || "Someone"}
-                            {personUid === uid ? " (You)" : ""}
-                          </div>
-                          <div className="text-sm font-semibold shrink-0">
-                            ${round2(Number(owed || 0)).toFixed(2)}
-                          </div>
-                        </div>
-                      ))}
+                  {canSettle ? (
+                    <button
+                      type="button"
+                      onClick={() => markExpenseSettled(e.id)}
+                      disabled={savingId === e.id}
+                      style={buttonStyle}
+                    >
+                      {savingId === e.id ? "Saving..." : "Mark Settled"}
+                    </button>
+                  ) : (
+                    <div style={infoTextStyle}>
+                      Only the payer or admin can mark this as settled.
                     </div>
-                  </div>
+                  )}
                 </div>
               );
             })}
@@ -579,3 +465,243 @@ function simplifyDebts(balances: Record<string, number>) {
 function round2(n: number) {
   return Math.round(n * 100) / 100;
 }
+
+const pageStyle: CSSProperties = {
+  display: "grid",
+  gap: 16,
+  color: "white",
+};
+
+const sectionStyle: CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.08)",
+  borderRadius: 22,
+  padding: 18,
+  background:
+    "linear-gradient(180deg, rgba(8,13,28,0.88) 0%, rgba(10,16,34,0.82) 100%)",
+  boxShadow: "0 18px 38px rgba(0,0,0,0.18)",
+  display: "grid",
+  gap: 14,
+};
+
+const sectionEyebrowStyle: CSSProperties = {
+  fontSize: 12,
+  textTransform: "uppercase",
+  letterSpacing: 2,
+  color: "#7dd3fc",
+  fontWeight: 800,
+};
+
+const sectionTitleStyle: CSSProperties = {
+  fontSize: 18,
+  fontWeight: 800,
+  lineHeight: 1.2,
+};
+
+const statsGridStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: 12,
+};
+
+const statCardStyle: CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.08)",
+  borderRadius: 16,
+  padding: 14,
+  background: "rgba(255,255,255,0.03)",
+};
+
+const statLabelStyle: CSSProperties = {
+  fontSize: 11,
+  color: "rgba(255,255,255,0.66)",
+  marginBottom: 8,
+  textTransform: "uppercase",
+  letterSpacing: 0.6,
+};
+
+const statValueStyle: CSSProperties = {
+  fontSize: 18,
+  fontWeight: 800,
+  lineHeight: 1.15,
+};
+
+const cardsGridStyle: CSSProperties = {
+  display: "grid",
+  gap: 12,
+};
+
+const balanceCardStyle: CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.08)",
+  borderRadius: 18,
+  padding: 16,
+  background: "rgba(255,255,255,0.03)",
+};
+
+const balanceTopStyle: CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: 12,
+};
+
+const balanceNameStyle: CSSProperties = {
+  fontSize: 16,
+  fontWeight: 800,
+  lineHeight: 1.25,
+  wordBreak: "break-word",
+};
+
+const balanceSubStyle: CSSProperties = {
+  marginTop: 6,
+  fontSize: 13,
+  color: "rgba(255,255,255,0.66)",
+};
+
+const balanceValueStyle: CSSProperties = {
+  marginTop: 14,
+  fontSize: 18,
+  fontWeight: 800,
+  lineHeight: 1.15,
+};
+
+const pillStyle: CSSProperties = {
+  borderRadius: 999,
+  padding: "7px 12px",
+  fontSize: 12,
+  fontWeight: 800,
+  border: "1px solid",
+  flexShrink: 0,
+};
+
+const creditPillStyle: CSSProperties = {
+  background: "rgba(22,163,74,0.12)",
+  color: "#86efac",
+  borderColor: "rgba(34,197,94,0.28)",
+};
+
+const debitPillStyle: CSSProperties = {
+  background: "rgba(239,68,68,0.12)",
+  color: "#fca5a5",
+  borderColor: "rgba(239,68,68,0.28)",
+};
+
+const cardsListStyle: CSSProperties = {
+  display: "grid",
+  gap: 12,
+};
+
+const simpleCardStyle: CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.08)",
+  borderRadius: 18,
+  padding: 16,
+  background: "rgba(255,255,255,0.03)",
+  display: "grid",
+  gap: 12,
+};
+
+const settlementLineStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+  flexWrap: "wrap",
+  fontSize: 16,
+  lineHeight: 1.3,
+};
+
+const settlementAmountStyle: CSSProperties = {
+  fontSize: 18,
+  fontWeight: 800,
+  lineHeight: 1.15,
+};
+
+const expenseTitleStyle: CSSProperties = {
+  fontSize: 17,
+  fontWeight: 800,
+  lineHeight: 1.25,
+};
+
+const chipRowStyle: CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 8,
+};
+
+const chipStyle: CSSProperties = {
+  borderRadius: 999,
+  padding: "8px 12px",
+  fontSize: 13,
+  color: "rgba(255,255,255,0.82)",
+  border: "1px solid rgba(255,255,255,0.10)",
+  background: "rgba(255,255,255,0.04)",
+};
+
+const statusStyle: CSSProperties = {
+  borderRadius: 14,
+  padding: "10px 12px",
+  fontWeight: 700,
+  fontSize: 14,
+};
+
+const receiveStyle: CSSProperties = {
+  background: "rgba(22,163,74,0.12)",
+  color: "#86efac",
+  border: "1px solid rgba(34,197,94,0.24)",
+};
+
+const oweStyle: CSSProperties = {
+  background: "rgba(239,68,68,0.12)",
+  color: "#fca5a5",
+  border: "1px solid rgba(239,68,68,0.24)",
+};
+
+const settledStyle: CSSProperties = {
+  background: "rgba(148,163,184,0.10)",
+  color: "#e2e8f0",
+  border: "1px solid rgba(148,163,184,0.18)",
+};
+
+const buttonStyle: CSSProperties = {
+  minHeight: 46,
+  borderRadius: 14,
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(59,130,246,0.9)",
+  color: "white",
+  fontWeight: 800,
+  fontSize: 15,
+  cursor: "pointer",
+};
+
+const infoTextStyle: CSSProperties = {
+  fontSize: 13,
+  color: "rgba(255,255,255,0.66)",
+  lineHeight: 1.5,
+};
+
+const loadingStyle: CSSProperties = {
+  padding: 12,
+  color: "rgba(255,255,255,0.75)",
+};
+
+const emptyWrapStyle: CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.08)",
+  borderRadius: 22,
+  padding: 18,
+  background: "rgba(255,255,255,0.03)",
+  display: "grid",
+  gap: 8,
+};
+
+const emptyTitleStyle: CSSProperties = {
+  fontSize: 18,
+  fontWeight: 800,
+};
+
+const emptyTextStyle: CSSProperties = {
+  fontSize: 14,
+  color: "rgba(255,255,255,0.68)",
+  lineHeight: 1.5,
+};
+
+const emptyMiniStyle: CSSProperties = {
+  fontSize: 14,
+  color: "rgba(255,255,255,0.68)",
+};

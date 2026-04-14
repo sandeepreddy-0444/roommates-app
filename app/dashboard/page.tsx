@@ -31,6 +31,7 @@ import AIAssistantPanel from "../../components/AIAssistantPanel";
 import ChoresPanel from "../../components/ChoresPanel";
 import SettlementsPanel from "../../components/SettlementsPanel";
 import AnalyticsPanel from "../../components/AnalyticsPanel";
+import PersonalPaymentsPanel from "../../components/PersonalPaymentsPanel";
 
 type Tab =
   | "profile"
@@ -44,7 +45,8 @@ type Tab =
   | "ai"
   | "chores"
   | "settlements"
-  | "analytics";
+  | "analytics"
+  | "personalPayments";
 
 type Roommate = { uid: string; name: string };
 type MonthKey = { year: number; month: number };
@@ -59,6 +61,7 @@ const defaultSidebarItems: SidebarItem[] = [
   { id: "profile", emoji: "👤", label: "Profile" },
   { id: "thisMonth", emoji: "📅", label: "This Month" },
   { id: "expenses", emoji: "💸", label: "Expenses" },
+  { id: "personalPayments", emoji: "💵", label: "Personal Payments" },
   { id: "settlements", emoji: "🤝", label: "Settlements" },
   { id: "analytics", emoji: "📊", label: "Analytics" },
   { id: "chores", emoji: "🧹", label: "Chores" },
@@ -70,6 +73,7 @@ const defaultSidebarItems: SidebarItem[] = [
 ];
 
 const SIDEBAR_ORDER_KEY = "dashboard.sidebarOrder.v1";
+const MOBILE_BREAKPOINT = 900;
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -108,7 +112,7 @@ export default function DashboardPage() {
   const [unreadNotifs, setUnreadNotifs] = useState<number>(0);
 
   const loading = useMemo(() => !authChecked, [authChecked]);
-  const isMobile = viewportWidth <= 900;
+  const isMobile = viewportWidth <= MOBILE_BREAKPOINT;
 
   const myName = useMemo(() => {
     const fromRoommates =
@@ -171,20 +175,29 @@ export default function DashboardPage() {
     };
 
     handleResize();
-    window.addEventListener("resize", handleResize);
+    window.addEventListener("resize", handleResize, { passive: true });
 
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   useEffect(() => {
-    if (!isMobile) setMobileMenuOpen(false);
+    if (!isMobile) {
+      setMobileMenuOpen(false);
+    }
   }, [isMobile]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
-    document.body.style.overflow = isMobile && mobileMenuOpen ? "hidden" : "";
-    return () => {
+
+    const previousOverflow = document.body.style.overflow;
+    if (isMobile && mobileMenuOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
       document.body.style.overflow = "";
+    }
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
     };
   }, [isMobile, mobileMenuOpen]);
 
@@ -316,11 +329,13 @@ export default function DashboardPage() {
 
     const unsub = onSnapshot(q, (snap) => {
       let unread = 0;
+
       for (const d of snap.docs) {
         const data = d.data() as any;
         const readBy = Array.isArray(data?.readBy) ? data.readBy : [];
         if (!readBy.includes(uid)) unread += 1;
       }
+
       setUnreadNotifs(unread);
     });
 
@@ -339,6 +354,7 @@ export default function DashboardPage() {
 
   const handleDrop = (dropIndex: number) => {
     if (!isReordering) return;
+
     if (draggedIndex === null || draggedIndex === dropIndex) {
       setDraggedIndex(null);
       return;
@@ -356,25 +372,33 @@ export default function DashboardPage() {
 
   const removeMember = async (memberUid: string) => {
     if (!groupId || !uid) return;
-    if (uid !== createdBy) return alert("Only admin can remove members.");
+    if (uid !== createdBy) {
+      alert("Only admin can remove members.");
+      return;
+    }
 
     const ok = confirm("Remove this roommate?");
     if (!ok) return;
 
     await deleteDoc(doc(db, "groups", groupId, "members", memberUid));
     await setDoc(doc(db, "users", memberUid), { groupId: null }, { merge: true });
+
     alert("Roommate removed ✅");
   };
 
   const transferAdmin = async (newAdminUid: string) => {
     if (!groupId || !uid) return;
-    if (uid !== createdBy) return alert("Only admin can transfer admin.");
+    if (uid !== createdBy) {
+      alert("Only admin can transfer admin.");
+      return;
+    }
 
     const ok = confirm("Transfer admin?");
     if (!ok) return;
 
     await updateDoc(doc(db, "groups", groupId), { createdBy: newAdminUid });
     setCreatedBy(newAdminUid);
+
     alert("Admin transferred ✅");
   };
 
@@ -404,7 +428,11 @@ export default function DashboardPage() {
   };
 
   const changePassword = async () => {
-    if (!email) return alert("No email found for this account.");
+    if (!email) {
+      alert("No email found for this account.");
+      return;
+    }
+
     try {
       await sendPasswordResetEmail(auth, email, {
         url: "https://roommates-app.vercel.app/reset-password",
@@ -417,7 +445,16 @@ export default function DashboardPage() {
   };
 
   if (loading) {
-    return <div style={{ padding: 24, color: "white" }}>Loading your data...</div>;
+    return (
+      <div style={loadingPageStyle}>
+        <div style={loadingCardStyle}>
+          <div style={loadingTitleStyle}>Loading your data...</div>
+          <div style={loadingSubtleStyle}>
+            Getting your room, expenses, and dashboard ready.
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -458,7 +495,7 @@ export default function DashboardPage() {
             style={mobileOverlayStyle}
           />
 
-          <aside style={mobileSidebarStyle}>
+          <aside style={mobileSidebarStyle} className="scrollable">
             <div style={sidebarTopStyle}>
               <div>
                 <div style={brandEyebrowStyle}>Roommates</div>
@@ -586,7 +623,7 @@ export default function DashboardPage() {
           </aside>
         ) : null}
 
-        <main style={mainPanelStyle}>
+        <main style={mainPanelStyle} className="scrollable">
           <div
             style={{
               ...topBarStyle,
@@ -625,7 +662,7 @@ export default function DashboardPage() {
                   <div style={profileHeaderStyle}>
                     <div style={heroAvatarStyle}>{initials}</div>
 
-                    <div>
+                    <div style={{ minWidth: 0 }}>
                       <div style={profileTitleStyle}>Profile</div>
                       <div style={profileSubtitleStyle}>Account details</div>
                     </div>
@@ -649,10 +686,19 @@ export default function DashboardPage() {
                   </div>
 
                   <div style={actionRowStyle}>
-                    <button type="button" onClick={changePassword} style={primaryBtnStyle}>
+                    <button
+                      type="button"
+                      onClick={changePassword}
+                      style={secondaryBtnStyle}
+                    >
                       Change Password
                     </button>
-                    <button type="button" onClick={logout} style={dangerBtnStyle}>
+
+                    <button
+                      type="button"
+                      onClick={logout}
+                      style={dangerBtnStyle}
+                    >
                       Logout
                     </button>
                   </div>
@@ -685,7 +731,13 @@ export default function DashboardPage() {
                       </div>
                     </div>
 
-                    <div style={{ display: "grid", gap: 6, width: isMobile ? "100%" : 220 }}>
+                    <div
+                      style={{
+                        display: "grid",
+                        gap: 6,
+                        width: isMobile ? "100%" : 220,
+                      }}
+                    >
                       <div style={inputLabelStyle}>Month</div>
                       <select
                         value={`${selectedMonth.year}-${selectedMonth.month}`}
@@ -699,6 +751,7 @@ export default function DashboardPage() {
                           <option
                             key={`${m.year}-${m.month}`}
                             value={`${m.year}-${m.month}`}
+                            style={{ background: "#0b1628", color: "#fff" }}
                           >
                             {monthLabel(m.year, m.month)}
                           </option>
@@ -712,16 +765,21 @@ export default function DashboardPage() {
                   style={{
                     ...statsGridStyle,
                     gridTemplateColumns: isMobile
-                      ? "1fr 1fr"
+                      ? "1fr"
                       : "repeat(auto-fit, minmax(180px, 1fr))",
                   }}
                 >
-                  <StatCard title="Total spent" value={`$${formatMoney(monthTotal)}`} />
+                  <StatCard
+                    title="Total spent"
+                    value={`$${formatMoney(monthTotal)}`}
+                  />
                   <StatCard title="You paid" value={`$${formatMoney(youPaid)}`} />
                   <StatCard title="You owe" value={`$${formatMoney(youOwe)}`} />
                   <StatCard
                     title="Net"
-                    value={`${net >= 0 ? "+" : "-"}$${formatMoney(Math.abs(net))}`}
+                    value={`${net >= 0 ? "+" : "-"}$${formatMoney(
+                      Math.abs(net)
+                    )}`}
                   />
                   <StatCard title="Expenses count" value={`${monthCount}`} />
                 </div>
@@ -729,6 +787,7 @@ export default function DashboardPage() {
             )}
 
             {tab === "expenses" && <ExpensesPanel />}
+            {tab === "personalPayments" && <PersonalPaymentsPanel />}
             {tab === "settlements" && <SettlementsPanel />}
             {tab === "analytics" && <AnalyticsPanel />}
             {tab === "chores" && <ChoresPanel />}
@@ -825,6 +884,8 @@ function getTabTitle(tab: Tab) {
       return "This Month";
     case "expenses":
       return "Expenses";
+    case "personalPayments":
+      return "Personal Payments";
     case "settlements":
       return "Settlements";
     case "analytics":
@@ -886,7 +947,9 @@ function getExpenseDate(data: any): Date | null {
 }
 
 function estimateOwedForUser(data: any, uid: string, amount: number): number {
-  const map = data?.splits ?? data?.shares ?? data?.owedBy ?? data?.splitMap ?? null;
+  const map =
+    data?.splits ?? data?.shares ?? data?.owedBy ?? data?.splitMap ?? null;
+
   if (map && typeof map === "object") {
     const v = map[uid];
     const num = Number(v);
@@ -909,6 +972,35 @@ function estimateOwedForUser(data: any, uid: string, amount: number): number {
   return 0;
 }
 
+const loadingPageStyle: CSSProperties = {
+  minHeight: "100vh",
+  background: "#07111f",
+  color: "white",
+  padding: 16,
+  display: "grid",
+  placeItems: "center",
+};
+
+const loadingCardStyle: CSSProperties = {
+  width: "100%",
+  maxWidth: 520,
+  border: "1px solid rgba(255,255,255,0.10)",
+  borderRadius: 20,
+  padding: 20,
+  background: "rgba(255,255,255,0.03)",
+};
+
+const loadingTitleStyle: CSSProperties = {
+  fontSize: 22,
+  fontWeight: 800,
+  marginBottom: 8,
+};
+
+const loadingSubtleStyle: CSSProperties = {
+  color: "rgba(255,255,255,0.68)",
+  lineHeight: 1.5,
+};
+
 const pageStyle: CSSProperties = {
   minHeight: "100vh",
   background: "#07111f",
@@ -924,12 +1016,15 @@ const shellStyle: CSSProperties = {
 
 const desktopSidebarStyle: CSSProperties = {
   width: 270,
+  maxHeight: "calc(100vh - 24px)",
+  overflowY: "auto",
   border: "1px solid rgba(255,255,255,0.10)",
   borderRadius: 20,
   padding: 14,
   background: "rgba(255,255,255,0.03)",
   position: "sticky",
   top: 12,
+  WebkitOverflowScrolling: "touch",
 };
 
 const mobileSidebarStyle: CSSProperties = {
@@ -971,6 +1066,8 @@ const mobileMenuButtonStyle: CSSProperties = {
   color: "white",
   fontWeight: 700,
   cursor: "pointer",
+  WebkitTapHighlightColor: "transparent",
+  touchAction: "manipulation",
 };
 
 const sidebarTopStyle: CSSProperties = {
@@ -1003,6 +1100,8 @@ const iconActionStyle: CSSProperties = {
   color: "white",
   fontWeight: 700,
   cursor: "pointer",
+  WebkitTapHighlightColor: "transparent",
+  touchAction: "manipulation",
 };
 
 const sidebarButtonStyle: CSSProperties = {
@@ -1069,6 +1168,7 @@ const miniRoleStyle: CSSProperties = {
 const mainPanelStyle: CSSProperties = {
   flex: 1,
   minWidth: 0,
+  minHeight: 0,
   border: "1px solid rgba(255,255,255,0.10)",
   borderRadius: 20,
   padding: 14,
@@ -1093,7 +1193,7 @@ const topBarEyebrowStyle: CSSProperties = {
 
 const topBarTitleStyle: CSSProperties = {
   margin: 0,
-  fontSize: 26,
+  fontSize: 22,
   lineHeight: 1.15,
 };
 
@@ -1199,15 +1299,17 @@ const actionRowStyle: CSSProperties = {
   flexWrap: "wrap",
 };
 
-const primaryBtnStyle: CSSProperties = {
+const secondaryBtnStyle: CSSProperties = {
   minHeight: 44,
-  border: "1px solid rgba(96,165,250,0.55)",
+  border: "1px solid rgba(255,255,255,0.16)",
   borderRadius: 12,
   padding: "10px 14px",
-  background: "rgba(59,130,246,0.85)",
+  background: "rgba(255,255,255,0.06)",
   color: "white",
   fontWeight: 700,
   cursor: "pointer",
+  WebkitTapHighlightColor: "transparent",
+  touchAction: "manipulation",
 };
 
 const dangerBtnStyle: CSSProperties = {
@@ -1219,6 +1321,8 @@ const dangerBtnStyle: CSSProperties = {
   color: "white",
   fontWeight: 700,
   cursor: "pointer",
+  WebkitTapHighlightColor: "transparent",
+  touchAction: "manipulation",
 };
 
 const sectionHeaderRowStyle: CSSProperties = {
@@ -1265,19 +1369,20 @@ const statCardSmallStyle: CSSProperties = {
   borderRadius: 16,
   padding: 14,
   background: "rgba(255,255,255,0.03)",
-  minHeight: 96,
+  minHeight: 88,
 };
 
 const statTitleStyle: CSSProperties = {
-  fontSize: 12,
+  fontSize: 11,
   color: "rgba(255,255,255,0.72)",
-  marginBottom: 10,
+  marginBottom: 8,
   textTransform: "uppercase",
   letterSpacing: 0.6,
 };
 
 const statValueLargeStyle: CSSProperties = {
-  fontSize: 24,
+  fontSize: 20,
   fontWeight: 800,
-  letterSpacing: -0.4,
+  letterSpacing: -0.3,
+  lineHeight: 1.15,
 };

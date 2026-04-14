@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import {
   addDoc,
@@ -27,6 +27,7 @@ type Expense = {
   paidByUid?: string;
   paidBy?: string;
   participants?: string[];
+  visibleTo?: string[];
   splitMap?: Record<string, number>;
 };
 
@@ -52,22 +53,30 @@ function toDisplayDate(value: any): string {
   return "";
 }
 
+function uniqueIds(ids: string[]) {
+  return Array.from(new Set(ids.filter(Boolean)));
+}
+
 export default function ExpensesPanel() {
   const [uid, setUid] = useState<string | null>(null);
   const [groupId, setGroupId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
 
   const [roommates, setRoommates] = useState<Roommate[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [allExpenses, setAllExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
-  const [expenseDate, setExpenseDate] = useState(new Date().toISOString().slice(0, 10));
+  const [expenseDate, setExpenseDate] = useState(
+    new Date().toISOString().slice(0, 10)
+  );
   const [err, setErr] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
 
-  const [selectedParticipants, setSelectedParticipants] = useState<Record<string, boolean>>({});
+  const [selectedParticipants, setSelectedParticipants] = useState<
+    Record<string, boolean>
+  >({});
 
   const selectedRoommates = useMemo(
     () => roommates.filter((r) => selectedParticipants[r.uid]),
@@ -90,6 +99,26 @@ export default function ExpensesPanel() {
     selectedParticipants[uid]
       ? round2(enteredAmount - previewShare)
       : 0;
+
+  function canViewExpense(exp: Expense) {
+    if (!uid) return false;
+
+    const payer = exp.paidByUid || exp.createdByUid || null;
+    const visibleTo =
+      Array.isArray(exp.visibleTo) && exp.visibleTo.length > 0
+        ? exp.visibleTo
+        : uniqueIds([
+            ...(Array.isArray(exp.participants) ? exp.participants : []),
+            payer || "",
+          ]);
+
+    return visibleTo.includes(uid);
+  }
+
+  const expenses = useMemo(
+    () => allExpenses.filter(canViewExpense),
+    [allExpenses, uid]
+  );
 
   const summary = useMemo(() => {
     let youOweTotal = 0;
@@ -126,7 +155,7 @@ export default function ExpensesPanel() {
         setUid(null);
         setGroupId(null);
         setIsAdmin(false);
-        setExpenses([]);
+        setAllExpenses([]);
         setRoommates([]);
         setLoading(false);
         return;
@@ -165,7 +194,9 @@ export default function ExpensesPanel() {
       async (snap) => {
         const ids = snap.docs.map((d) => d.id);
 
-        const userDocs = await Promise.all(ids.map((id) => getDoc(doc(db, "users", id))));
+        const userDocs = await Promise.all(
+          ids.map((id) => getDoc(doc(db, "users", id)))
+        );
 
         const list: Roommate[] = userDocs.map((docSnap, i) => {
           const id = ids[i];
@@ -190,7 +221,7 @@ export default function ExpensesPanel() {
 
   useEffect(() => {
     if (!groupId) {
-      setExpenses([]);
+      setAllExpenses([]);
       return;
     }
 
@@ -212,14 +243,17 @@ export default function ExpensesPanel() {
             createdByUid: data?.createdByUid ?? null,
             paidByUid: data?.paidByUid ?? null,
             paidBy: data?.paidBy ?? null,
-            participants: Array.isArray(data?.participants) ? data.participants : [],
+            participants: Array.isArray(data?.participants)
+              ? data.participants
+              : [],
+            visibleTo: Array.isArray(data?.visibleTo) ? data.visibleTo : [],
             splitMap: data?.splitMap ?? {},
           };
         });
 
-        setExpenses(list);
+        setAllExpenses(list);
       },
-      () => setExpenses([])
+      () => setAllExpenses([])
     );
 
     return () => unsub();
@@ -255,7 +289,11 @@ export default function ExpensesPanel() {
     if (!uid || !groupId) return setErr("Not ready (missing user or room).");
     if (!expenseDate) return setErr("Expense date is required.");
 
-    const participants = roommates.filter((r) => selectedParticipants[r.uid]).map((r) => r.uid);
+    const chosenParticipants = roommates
+      .filter((r) => selectedParticipants[r.uid])
+      .map((r) => r.uid);
+
+    const participants = uniqueIds([uid, ...chosenParticipants]);
 
     if (participants.length === 0) {
       return setErr("Select at least one roommate to split the expense.");
@@ -266,12 +304,17 @@ export default function ExpensesPanel() {
 
     participants.forEach((id, index) => {
       if (index === participants.length - 1) {
-        const assignedSoFar = Object.values(splitMap).reduce((sum, v) => sum + v, 0);
+        const assignedSoFar = Object.values(splitMap).reduce(
+          (sum, v) => sum + v,
+          0
+        );
         splitMap[id] = Math.round((a - assignedSoFar) * 100) / 100;
       } else {
         splitMap[id] = share;
       }
     });
+
+    const visibleTo = uniqueIds([uid, ...participants]);
 
     setAdding(true);
     try {
@@ -286,6 +329,7 @@ export default function ExpensesPanel() {
         createdByUid: uid,
         paidByUid: uid,
         participants,
+        visibleTo,
         splitMap,
       });
 
@@ -319,9 +363,7 @@ export default function ExpensesPanel() {
     const payer = exp.paidByUid || exp.createdByUid || null;
 
     const perPerson =
-      participantIds.length > 0
-        ? round2(exp.amount / participantIds.length)
-        : 0;
+      participantIds.length > 0 ? round2(exp.amount / participantIds.length) : 0;
 
     const youShare = uid ? Number(splitMap[uid] || 0) : 0;
     const youPaid = uid && payer === uid ? Number(exp.amount || 0) : 0;
@@ -332,18 +374,18 @@ export default function ExpensesPanel() {
       payer,
       perPerson,
       youShare,
-      youPaid,
       youNet,
     };
   }
 
-  if (loading) return <div style={{ padding: 10, opacity: 0.7 }}>Loading your data...</div>;
+  if (loading) {
+    return <div style={{ padding: 10, opacity: 0.7 }}>Loading your data...</div>;
+  }
 
   if (!groupId) {
     return (
       <div style={{ padding: 10 }}>
-        <h2 style={{ marginTop: 0, marginBottom: 8 }}>Expenses</h2>
-        <p style={{ opacity: 0.78 }}>
+        <p style={{ opacity: 0.78, margin: 0 }}>
           You are not in a room yet. Go to the Room page and join or create one.
         </p>
       </div>
@@ -351,12 +393,9 @@ export default function ExpensesPanel() {
   }
 
   return (
-    <div style={{ display: "grid", gap: 18 }}>
-      <div>
-        <h2 style={{ margin: 0, fontSize: 28 }}>Expenses</h2>
-        <div style={{ marginTop: 6, color: "rgba(255,255,255,0.68)" }}>
-          Track shared spending, preview split amounts, and review recent records.
-        </div>
+    <div style={{ display: "grid", gap: 16 }}>
+      <div style={introTextStyle}>
+        Shared expenses are visible only to the selected participants.
       </div>
 
       <div style={panelStyle}>
@@ -368,7 +407,7 @@ export default function ExpensesPanel() {
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Dinner, utilities, shopping..."
+              placeholder="Dinner, movie, groceries..."
               style={inputStyle}
               disabled={adding}
             />
@@ -403,15 +442,23 @@ export default function ExpensesPanel() {
             <div>
               <div style={sectionHeadingStyle}>Split with roommates</div>
               <div style={helperTextStyle}>
-                Choose who should share this expense.
+                Only selected roommates will see this expense.
               </div>
             </div>
 
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button type="button" onClick={selectAllParticipants} style={secondaryBtnStyle}>
+              <button
+                type="button"
+                onClick={selectAllParticipants}
+                style={secondaryBtnStyle}
+              >
                 Select all
               </button>
-              <button type="button" onClick={clearAllParticipants} style={secondaryBtnStyle}>
+              <button
+                type="button"
+                onClick={clearAllParticipants}
+                style={secondaryBtnStyle}
+              >
                 Clear all
               </button>
             </div>
@@ -436,7 +483,7 @@ export default function ExpensesPanel() {
                   checked={!!selectedParticipants[mate.uid]}
                   onChange={() => toggleParticipant(mate.uid)}
                 />
-                <span style={{ fontWeight: 600 }}>
+                <span style={{ fontWeight: 700, fontSize: 14 }}>
                   {mate.name} {mate.uid === uid ? "(You)" : ""}
                 </span>
               </label>
@@ -445,10 +492,13 @@ export default function ExpensesPanel() {
 
           <div style={{ marginTop: 12, ...helperTextStyle }}>
             {selectedCount > 0 && amount && Number(amount) > 0
-              ? `Each selected roommate owes about $${formatMoney(
-                  Number(amount) / selectedCount
+              ? `Each selected member owes about $${formatMoney(
+                  Number(amount) / uniqueIds([
+                    uid || "",
+                    ...selectedRoommates.map((r) => r.uid),
+                  ]).length
                 )}`
-              : "Select roommates to split this expense equally."}
+              : "Select who should share this expense."}
           </div>
 
           {selectedCount > 0 && Number.isFinite(enteredAmount) && enteredAmount > 0 && (
@@ -459,26 +509,28 @@ export default function ExpensesPanel() {
                 <strong>${formatMoney(enteredAmount)}</strong>
               </div>
               <div style={previewRowStyle}>
-                <span>Split among</span>
-                <strong>{selectedCount} member(s)</strong>
+                <span>Visible to</span>
+                <strong>
+                  {
+                    uniqueIds([uid || "", ...selectedRoommates.map((r) => r.uid)])
+                      .length
+                  }{" "}
+                  member(s)
+                </strong>
               </div>
               <div style={previewRowStyle}>
                 <span>Each share</span>
                 <strong>${formatMoney(previewShare)}</strong>
               </div>
 
-              {uid && selectedParticipants[uid] ? (
+              {uid ? (
                 <div style={{ ...previewRowStyle, marginTop: 4 }}>
                   <span>If you paid</span>
                   <strong style={{ color: "#93c5fd" }}>
                     Receive ${formatMoney(previewYouReceive)}
                   </strong>
                 </div>
-              ) : (
-                <div style={{ ...helperTextStyle, marginTop: 4 }}>
-                  You are not included in this split right now.
-                </div>
-              )}
+              ) : null}
             </div>
           )}
         </div>
@@ -515,7 +567,7 @@ export default function ExpensesPanel() {
         <div style={sectionHeadingStyle}>Recent expenses</div>
 
         {expenses.length === 0 ? (
-          <div style={emptyStateStyle}>No expenses yet.</div>
+          <div style={emptyStateStyle}>No visible expenses yet.</div>
         ) : (
           <div style={{ display: "grid", gap: 14 }}>
             {expenses.map((exp) => {
@@ -537,7 +589,7 @@ export default function ExpensesPanel() {
 
                       {breakdown.participantIds.length > 0 ? (
                         <div style={metaTextStyle}>
-                          Split with {breakdown.participantIds.length} roommate(s)
+                          Visible to {breakdown.participantIds.length} member(s)
                         </div>
                       ) : null}
                     </div>
@@ -625,10 +677,16 @@ export default function ExpensesPanel() {
   );
 }
 
-const panelStyle: React.CSSProperties = {
+const introTextStyle: CSSProperties = {
+  color: "rgba(255,255,255,0.68)",
+  fontSize: 14,
+  lineHeight: 1.6,
+};
+
+const panelStyle: CSSProperties = {
   border: "1px solid rgba(255,255,255,0.08)",
   borderRadius: 24,
-  padding: 20,
+  padding: 18,
   background:
     "linear-gradient(180deg, rgba(8,13,28,0.88) 0%, rgba(10,16,34,0.82) 100%)",
   boxShadow: "0 18px 38px rgba(0,0,0,0.20)",
@@ -636,37 +694,38 @@ const panelStyle: React.CSSProperties = {
   gap: 16,
 };
 
-const innerCardStyle: React.CSSProperties = {
+const innerCardStyle: CSSProperties = {
   border: "1px solid rgba(255,255,255,0.08)",
   borderRadius: 20,
   padding: 16,
   background: "rgba(255,255,255,0.03)",
 };
 
-const sectionHeadingStyle: React.CSSProperties = {
+const sectionHeadingStyle: CSSProperties = {
   fontWeight: 800,
-  fontSize: 18,
+  fontSize: 16,
 };
 
-const helperTextStyle: React.CSSProperties = {
+const helperTextStyle: CSSProperties = {
   fontSize: 13,
   color: "rgba(255,255,255,0.66)",
+  lineHeight: 1.5,
 };
 
-const fieldLabelStyle: React.CSSProperties = {
+const fieldLabelStyle: CSSProperties = {
   fontSize: 12,
   color: "rgba(255,255,255,0.68)",
   textTransform: "uppercase",
   letterSpacing: 0.6,
 };
 
-const formGridStyle: React.CSSProperties = {
+const formGridStyle: CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
   gap: 14,
 };
 
-const splitHeaderStyle: React.CSSProperties = {
+const splitHeaderStyle: CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "flex-start",
@@ -674,7 +733,7 @@ const splitHeaderStyle: React.CSSProperties = {
   flexWrap: "wrap",
 };
 
-const inputStyle: React.CSSProperties = {
+const inputStyle: CSSProperties = {
   background: "rgba(5,10,20,0.92)",
   color: "white",
   border: "1px solid rgba(255,255,255,0.10)",
@@ -682,9 +741,10 @@ const inputStyle: React.CSSProperties = {
   padding: "12px 14px",
   outline: "none",
   boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
+  fontSize: 14,
 };
 
-const participantCardStyle: React.CSSProperties = {
+const participantCardStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: 12,
@@ -693,17 +753,18 @@ const participantCardStyle: React.CSSProperties = {
   cursor: "pointer",
 };
 
-const previewCardStyle: React.CSSProperties = {
+const previewCardStyle: CSSProperties = {
   marginTop: 14,
   border: "1px solid rgba(96,165,250,0.22)",
   borderRadius: 18,
   padding: 14,
-  background: "linear-gradient(135deg, rgba(59,130,246,0.12), rgba(99,102,241,0.08))",
+  background:
+    "linear-gradient(135deg, rgba(59,130,246,0.12), rgba(99,102,241,0.08))",
   display: "grid",
   gap: 10,
 };
 
-const previewRowStyle: React.CSSProperties = {
+const previewRowStyle: CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
   gap: 12,
@@ -711,7 +772,7 @@ const previewRowStyle: React.CSSProperties = {
   fontSize: 14,
 };
 
-const primaryBtnStyle: React.CSSProperties = {
+const primaryBtnStyle: CSSProperties = {
   border: "1px solid rgba(96,165,250,0.75)",
   borderRadius: 14,
   padding: "12px 16px",
@@ -721,9 +782,10 @@ const primaryBtnStyle: React.CSSProperties = {
   cursor: "pointer",
   boxShadow: "0 14px 28px rgba(37,99,235,0.24)",
   transition: "all 0.2s ease",
+  fontSize: 15,
 };
 
-const secondaryBtnStyle: React.CSSProperties = {
+const secondaryBtnStyle: CSSProperties = {
   border: "1px solid rgba(255,255,255,0.10)",
   borderRadius: 12,
   padding: "9px 12px",
@@ -732,9 +794,10 @@ const secondaryBtnStyle: React.CSSProperties = {
   cursor: "pointer",
   fontWeight: 700,
   transition: "all 0.2s ease",
+  fontSize: 14,
 };
 
-const errorStyle: React.CSSProperties = {
+const errorStyle: CSSProperties = {
   color: "#fda4af",
   fontSize: 13,
   background: "rgba(127,29,29,0.22)",
@@ -743,10 +806,10 @@ const errorStyle: React.CSSProperties = {
   padding: "10px 12px",
 };
 
-const summaryCardStyle: React.CSSProperties = {
+const summaryCardStyle: CSSProperties = {
   border: "1px solid rgba(255,255,255,0.08)",
   borderRadius: 24,
-  padding: 20,
+  padding: 18,
   background:
     "linear-gradient(135deg, rgba(15,23,42,0.9), rgba(30,41,59,0.85))",
   boxShadow: "0 18px 38px rgba(0,0,0,0.18)",
@@ -754,38 +817,39 @@ const summaryCardStyle: React.CSSProperties = {
   gap: 14,
 };
 
-const summaryGridStyle: React.CSSProperties = {
+const summaryGridStyle: CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
   gap: 14,
 };
 
-const summaryItemStyle: React.CSSProperties = {
+const summaryItemStyle: CSSProperties = {
   border: "1px solid rgba(255,255,255,0.08)",
   borderRadius: 18,
   padding: 16,
   background: "rgba(255,255,255,0.03)",
 };
 
-const summaryLabelStyle: React.CSSProperties = {
-  fontSize: 12,
+const summaryLabelStyle: CSSProperties = {
+  fontSize: 11,
   color: "rgba(255,255,255,0.68)",
   marginBottom: 8,
   textTransform: "uppercase",
   letterSpacing: 0.6,
 };
 
-const summaryValueStyle: React.CSSProperties = {
-  fontSize: 24,
+const summaryValueStyle: CSSProperties = {
+  fontSize: 20,
   fontWeight: 900,
+  lineHeight: 1.15,
 };
 
-const emptyStateStyle: React.CSSProperties = {
+const emptyStateStyle: CSSProperties = {
   color: "rgba(255,255,255,0.68)",
   padding: "10px 2px",
 };
 
-const expenseCardStyle: React.CSSProperties = {
+const expenseCardStyle: CSSProperties = {
   border: "1px solid rgba(255,255,255,0.08)",
   borderRadius: 20,
   padding: 16,
@@ -794,7 +858,7 @@ const expenseCardStyle: React.CSSProperties = {
   gap: 14,
 };
 
-const expenseTopStyle: React.CSSProperties = {
+const expenseTopStyle: CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "flex-start",
@@ -802,32 +866,36 @@ const expenseTopStyle: React.CSSProperties = {
   flexWrap: "wrap",
 };
 
-const expenseTitleStyle: React.CSSProperties = {
+const expenseTitleStyle: CSSProperties = {
   fontWeight: 900,
-  fontSize: 18,
+  fontSize: 16,
+  lineHeight: 1.2,
 };
 
-const metaTextStyle: React.CSSProperties = {
+const metaTextStyle: CSSProperties = {
   fontSize: 13,
   color: "rgba(255,255,255,0.66)",
+  lineHeight: 1.5,
 };
 
-const expenseTopRightStyle: React.CSSProperties = {
+const expenseTopRightStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: 10,
   flexWrap: "wrap",
 };
 
-const amountPillStyle: React.CSSProperties = {
+const amountPillStyle: CSSProperties = {
   padding: "10px 14px",
   borderRadius: 999,
   fontWeight: 900,
-  background: "linear-gradient(135deg, rgba(99,102,241,0.26), rgba(59,130,246,0.22))",
+  fontSize: 15,
+  background:
+    "linear-gradient(135deg, rgba(99,102,241,0.26), rgba(59,130,246,0.22))",
   border: "1px solid rgba(129,140,248,0.26)",
 };
 
-const breakdownCardStyle: React.CSSProperties = {
+const breakdownCardStyle: CSSProperties = {
   border: "1px solid rgba(255,255,255,0.08)",
   borderRadius: 18,
   padding: 14,
@@ -836,36 +904,40 @@ const breakdownCardStyle: React.CSSProperties = {
   gap: 10,
 };
 
-const statusGoodStyle: React.CSSProperties = {
+const statusGoodStyle: CSSProperties = {
   borderRadius: 14,
   padding: "10px 12px",
   background: "rgba(22,163,74,0.18)",
   border: "1px solid rgba(74,222,128,0.24)",
   color: "#bbf7d0",
   fontWeight: 700,
+  fontSize: 14,
 };
 
-const statusWarnStyle: React.CSSProperties = {
+const statusWarnStyle: CSSProperties = {
   borderRadius: 14,
   padding: "10px 12px",
   background: "rgba(217,119,6,0.16)",
   border: "1px solid rgba(251,191,36,0.22)",
   color: "#fde68a",
   fontWeight: 700,
+  fontSize: 14,
 };
 
-const statusNeutralStyle: React.CSSProperties = {
+const statusNeutralStyle: CSSProperties = {
   borderRadius: 14,
   padding: "10px 12px",
   background: "rgba(148,163,184,0.12)",
   border: "1px solid rgba(148,163,184,0.18)",
   color: "#e2e8f0",
   fontWeight: 700,
+  fontSize: 14,
 };
 
-const splitRowStyle: React.CSSProperties = {
+const splitRowStyle: CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
   gap: 12,
   fontSize: 14,
+  lineHeight: 1.5,
 };
