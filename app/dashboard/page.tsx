@@ -1718,6 +1718,11 @@ const homeHeaderBrandPillTextStyle: CSSProperties = {
   color: "var(--app-text-primary)",
 };
 
+/** Space above the fixed bottom tab bar so the last home tiles (e.g. Voting) aren’t hidden. */
+const mainBottomTabClearance: CSSProperties = {
+  paddingBottom: "calc(76px + env(safe-area-inset-bottom, 0px))",
+};
+
 /** Home <main>: block layout (not grid) so the tile block doesn’t pick up extra vertical space. */
 const homeMainAreaStyle: CSSProperties = {
   display: "block",
@@ -1725,6 +1730,7 @@ const homeMainAreaStyle: CSSProperties = {
   minWidth: 0,
   margin: 0,
   padding: 0,
+  ...mainBottomTabClearance,
 };
 
 const homeHomeRootStyle: CSSProperties = {
@@ -1745,7 +1751,7 @@ const homeSheetStyle: CSSProperties = {
   borderRadius: "28px 28px 0 0",
   background: "var(--app-home-sheet-bg)",
   boxShadow: "var(--app-home-sheet-shadow)",
-  padding: "20px 12px 4px",
+  padding: "20px 12px 12px",
   marginTop: -2,
   minWidth: 0,
   overflow: "visible",
@@ -2035,6 +2041,7 @@ const titleStyle: CSSProperties = {
 const contentStyle: CSSProperties = {
   display: "grid",
   gap: 14,
+  ...mainBottomTabClearance,
 };
 
 const stackStyle: CSSProperties = {
