@@ -49,6 +49,8 @@ export default function SettlementsPanel() {
   const [allExpenses, setAllExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
+  /** In-app confirm — `window.confirm` is unreliable on many mobile WebViews. */
+  const [settleTarget, setSettleTarget] = useState<Expense | null>(null);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
@@ -77,6 +79,15 @@ export default function SettlementsPanel() {
 
     return () => unsub();
   }, []);
+
+  useEffect(() => {
+    if (!settleTarget) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !savingId) setSettleTarget(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [settleTarget, savingId]);
 
   useEffect(() => {
     if (!groupId) return;
@@ -194,19 +205,20 @@ export default function SettlementsPanel() {
     return ids.size;
   }, [unsettledExpenses]);
 
-  async function markExpenseSettled(expenseId: string) {
+  async function confirmMarkExpenseSettled(exp: Expense) {
     if (!groupId) return;
 
-    const ok = confirm("Are you sure you want to mark this expense as settled?");
-    if (!ok) return;
-
-    setSavingId(expenseId);
+    setSavingId(exp.id);
 
     try {
-      await updateDoc(doc(db, "groups", groupId, "expenses", expenseId), {
+      await updateDoc(doc(db, "groups", groupId, "expenses", exp.id), {
         settled: true,
         settledAt: serverTimestamp(),
       });
+      setSettleTarget(null);
+    } catch (e) {
+      console.error(e);
+      alert("Could not mark as settled. Check your connection and try again.");
     } finally {
       setSavingId(null);
     }
@@ -292,34 +304,24 @@ export default function SettlementsPanel() {
 
               return (
                 <div key={personUid} style={balanceCardStyle}>
-                  <div style={balanceTopStyle}>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={balanceNameStyle}>
+                  <div style={balanceRowGridStyle}>
+                    <div style={balanceNameStatusStyle}>
+                      <span style={balanceNameStyle}>
                         {name}
                         {uid === personUid ? " (You)" : ""}
-                      </div>
-                      <div style={balanceSubStyle}>
+                      </span>
+                      <span style={balanceSubStyle}>
                         {positive ? "Should receive" : "Needs to pay"}
-                      </div>
+                      </span>
                     </div>
-
-                    <div
+                    <span
                       style={{
-                        ...pillStyle,
-                        ...(positive ? creditPillStyle : debitPillStyle),
+                        ...balanceAmountInlineStyle,
+                        color: positive ? "#86efac" : "#fca5a5",
                       }}
                     >
-                      {positive ? "Credit" : "Debit"}
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      ...balanceValueStyle,
-                      color: positive ? "#86efac" : "#fca5a5",
-                    }}
-                  >
-                    {value >= 0 ? "+" : "-"}${Math.abs(round2(value)).toFixed(2)}
+                      {value >= 0 ? "+" : "-"}${Math.abs(round2(value)).toFixed(2)}
+                    </span>
                   </div>
                 </div>
               );
@@ -345,10 +347,12 @@ export default function SettlementsPanel() {
                   <strong>{users[s.from] || "Someone"}</strong>
                   <span style={{ opacity: 0.65 }}>→</span>
                   <strong>{users[s.to] || "Someone"}</strong>
-                </div>
-
-                <div style={settlementAmountStyle}>
-                  ${round2(s.amount).toFixed(2)}
+                  <span style={settlementAmountInlineSepStyle} aria-hidden>
+                    ·
+                  </span>
+                  <span style={settlementAmountStyle}>
+                    ${round2(s.amount).toFixed(2)}
+                  </span>
                 </div>
               </div>
             ))}
@@ -406,7 +410,7 @@ export default function SettlementsPanel() {
                   {canSettle ? (
                     <button
                       type="button"
-                      onClick={() => markExpenseSettled(e.id)}
+                      onClick={() => setSettleTarget(e)}
                       disabled={savingId === e.id}
                       style={buttonStyle}
                     >
@@ -423,6 +427,63 @@ export default function SettlementsPanel() {
           </div>
         )}
       </section>
+
+      {settleTarget ? (
+        <div
+          style={modalOverlayStyle}
+          role="presentation"
+          onClick={() => {
+            if (!savingId) setSettleTarget(null);
+          }}
+        >
+          <div
+            style={modalCardStyle}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="settle-dialog-title"
+            onClick={(ev) => ev.stopPropagation()}
+          >
+            <h3 id="settle-dialog-title" style={modalTitleStyle}>
+              Mark expense settled?
+            </h3>
+            <div style={modalWarningBannerStyle} role="alert">
+              <span style={modalWarningLabelStyle}>Warning</span>
+              <p style={modalWarningTextStyle}>
+                Only confirm after payments match what you agreed. This updates unsettled balances for
+                everyone who shares this room.
+              </p>
+            </div>
+            <p style={modalBodyStyle}>
+              <strong>{settleTarget.title}</strong>
+              <span style={{ display: "block", marginTop: 8, fontVariantNumeric: "tabular-nums" }}>
+                Total: ${Number(settleTarget.amount || 0).toFixed(2)}
+              </span>
+            </p>
+            <p style={modalFinePrintStyle}>
+              This marks the bill as closed for splitting purposes: it stops counting toward the
+              unsettled totals above. The expense record stays in your history — it is not deleted.
+            </p>
+            <div style={modalActionsStyle}>
+              <button
+                type="button"
+                style={modalCancelBtnStyle}
+                disabled={!!savingId}
+                onClick={() => setSettleTarget(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                style={modalConfirmBtnStyle}
+                disabled={!!savingId}
+                onClick={() => void confirmMarkExpenseSettled(settleTarget)}
+              >
+                {savingId ? "Saving…" : "Mark settled"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -468,224 +529,232 @@ function round2(n: number) {
 
 const pageStyle: CSSProperties = {
   display: "grid",
-  gap: 16,
-  color: "white",
+  gap: 10,
+  color: "#0f172a",
 };
 
 const sectionStyle: CSSProperties = {
-  border: "1px solid rgba(255,255,255,0.08)",
-  borderRadius: 22,
-  padding: 18,
-  background:
-    "linear-gradient(180deg, rgba(8,13,28,0.88) 0%, rgba(10,16,34,0.82) 100%)",
-  boxShadow: "0 18px 38px rgba(0,0,0,0.18)",
+  border: "1px solid var(--app-border-subtle, rgba(148, 163, 184, 0.32))",
+  borderRadius: "clamp(16px, 3.5vw, 22px)",
+  padding: "clamp(12px, 3.2vw, 18px)",
+  background: "var(--app-surface-elevated, linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%))",
+  boxShadow: "var(--app-shadow-sheet, 0 8px 28px rgba(15, 23, 42, 0.07))",
   display: "grid",
-  gap: 14,
+  gap: 8,
 };
 
 const sectionEyebrowStyle: CSSProperties = {
-  fontSize: 12,
+  fontSize: "clamp(10px, 2.6vw, 12px)",
   textTransform: "uppercase",
-  letterSpacing: 2,
-  color: "#7dd3fc",
+  letterSpacing: 0.4,
+  color: "rgba(15, 23, 42, 0.55)",
   fontWeight: 800,
 };
 
 const sectionTitleStyle: CSSProperties = {
-  fontSize: 18,
+  fontSize: "clamp(15px, 3.7vw, 18px)",
   fontWeight: 800,
   lineHeight: 1.2,
+  color: "#0f172a",
 };
 
 const statsGridStyle: CSSProperties = {
   display: "grid",
   gridTemplateColumns: "1fr 1fr",
-  gap: 12,
+  gap: 8,
 };
 
 const statCardStyle: CSSProperties = {
-  border: "1px solid rgba(255,255,255,0.08)",
-  borderRadius: 16,
-  padding: 14,
-  background: "rgba(255,255,255,0.03)",
+  border: "1px solid var(--app-border-subtle, rgba(148, 163, 184, 0.32))",
+  borderRadius: 14,
+  padding: "clamp(10px, 2.6vw, 14px)",
+  background: "var(--app-surface-card, rgba(255, 255, 255, 0.94))",
 };
 
 const statLabelStyle: CSSProperties = {
-  fontSize: 11,
-  color: "rgba(255,255,255,0.66)",
-  marginBottom: 8,
+  fontSize: "clamp(9px, 2.4vw, 11px)",
+  color: "rgba(15, 23, 42, 0.76)",
+  marginBottom: 3,
   textTransform: "uppercase",
-  letterSpacing: 0.6,
+  letterSpacing: 0.08,
 };
 
 const statValueStyle: CSSProperties = {
-  fontSize: 18,
+  fontSize: "clamp(15px, 4vw, 18px)",
   fontWeight: 800,
   lineHeight: 1.15,
+  color: "#0f172a",
+  fontVariantNumeric: "tabular-nums",
 };
 
 const cardsGridStyle: CSSProperties = {
   display: "grid",
-  gap: 12,
+  gap: 8,
 };
 
 const balanceCardStyle: CSSProperties = {
-  border: "1px solid rgba(255,255,255,0.08)",
-  borderRadius: 18,
-  padding: 16,
-  background: "rgba(255,255,255,0.03)",
+  border: "1px solid var(--app-border-subtle, rgba(148, 163, 184, 0.32))",
+  borderRadius: 16,
+  padding: "clamp(8px, 2.2vw, 12px) clamp(11px, 2.8vw, 14px)",
+  background: "var(--app-surface-card, rgba(255, 255, 255, 0.94))",
 };
 
-const balanceTopStyle: CSSProperties = {
+/** One dense row: name + status (left) · amount (right). */
+const balanceRowGridStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr) auto",
+  alignItems: "baseline",
+  gap: "6px 10px",
+  columnGap: 12,
+  width: "100%",
+};
+
+const balanceNameStatusStyle: CSSProperties = {
   display: "flex",
-  justifyContent: "space-between",
-  alignItems: "flex-start",
-  gap: 12,
+  flexWrap: "wrap",
+  alignItems: "baseline",
+  gap: "6px 10px",
+  minWidth: 0,
 };
 
 const balanceNameStyle: CSSProperties = {
-  fontSize: 16,
+  fontSize: "clamp(13px, 3.2vw, 15px)",
   fontWeight: 800,
   lineHeight: 1.25,
   wordBreak: "break-word",
+  color: "#0f172a",
 };
 
 const balanceSubStyle: CSSProperties = {
-  marginTop: 6,
-  fontSize: 13,
-  color: "rgba(255,255,255,0.66)",
+  marginTop: 0,
+  fontSize: "clamp(11px, 2.7vw, 12px)",
+  color: "rgba(15, 23, 42, 0.72)",
+  whiteSpace: "nowrap",
 };
 
-const balanceValueStyle: CSSProperties = {
-  marginTop: 14,
-  fontSize: 18,
+const balanceAmountInlineStyle: CSSProperties = {
+  justifySelf: "end",
+  textAlign: "right",
+  fontSize: "clamp(14px, 3.5vw, 17px)",
   fontWeight: 800,
   lineHeight: 1.15,
-};
-
-const pillStyle: CSSProperties = {
-  borderRadius: 999,
-  padding: "7px 12px",
-  fontSize: 12,
-  fontWeight: 800,
-  border: "1px solid",
-  flexShrink: 0,
-};
-
-const creditPillStyle: CSSProperties = {
-  background: "rgba(22,163,74,0.12)",
-  color: "#86efac",
-  borderColor: "rgba(34,197,94,0.28)",
-};
-
-const debitPillStyle: CSSProperties = {
-  background: "rgba(239,68,68,0.12)",
-  color: "#fca5a5",
-  borderColor: "rgba(239,68,68,0.28)",
+  fontVariantNumeric: "tabular-nums",
 };
 
 const cardsListStyle: CSSProperties = {
   display: "grid",
-  gap: 12,
+  gap: 8,
 };
 
 const simpleCardStyle: CSSProperties = {
-  border: "1px solid rgba(255,255,255,0.08)",
-  borderRadius: 18,
-  padding: 16,
-  background: "rgba(255,255,255,0.03)",
+  border: "1px solid var(--app-border-subtle, rgba(148, 163, 184, 0.32))",
+  borderRadius: 16,
+  padding: "clamp(11px, 2.6vw, 14px)",
+  background: "var(--app-surface-card, rgba(255, 255, 255, 0.94))",
   display: "grid",
-  gap: 12,
+  gap: 6,
 };
 
 const settlementLineStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
-  gap: 10,
+  gap: 4,
   flexWrap: "wrap",
-  fontSize: 16,
+  fontSize: "clamp(13px, 3.1vw, 16px)",
   lineHeight: 1.3,
 };
 
+const settlementAmountInlineSepStyle: CSSProperties = {
+  opacity: 0.45,
+  fontWeight: 600,
+  userSelect: "none",
+  padding: "0 1px",
+};
+
 const settlementAmountStyle: CSSProperties = {
-  fontSize: 18,
+  fontSize: "clamp(15px, 3.6vw, 18px)",
   fontWeight: 800,
-  lineHeight: 1.15,
+  lineHeight: 1.25,
+  fontVariantNumeric: "tabular-nums",
 };
 
 const expenseTitleStyle: CSSProperties = {
-  fontSize: 17,
+  fontSize: "clamp(15px, 3.6vw, 17px)",
   fontWeight: 800,
   lineHeight: 1.25,
+  color: "#0f172a",
 };
 
 const chipRowStyle: CSSProperties = {
   display: "flex",
   flexWrap: "wrap",
-  gap: 8,
+  gap: 6,
+  alignItems: "center",
+  rowGap: 6,
 };
 
 const chipStyle: CSSProperties = {
   borderRadius: 999,
-  padding: "8px 12px",
-  fontSize: 13,
-  color: "rgba(255,255,255,0.82)",
-  border: "1px solid rgba(255,255,255,0.10)",
-  background: "rgba(255,255,255,0.04)",
+  padding: "6px 10px",
+  fontSize: "clamp(11px, 2.8vw, 13px)",
+  color: "rgba(15, 23, 42, 0.62)",
+  border: "1px solid rgba(148, 163, 184, 0.4)",
+  background: "rgba(255, 255, 255, 0.55)",
 };
 
 const statusStyle: CSSProperties = {
-  borderRadius: 14,
-  padding: "10px 12px",
+  borderRadius: 12,
+  padding: "8px 10px",
   fontWeight: 700,
-  fontSize: 14,
+  fontSize: "clamp(12px, 3.1vw, 14px)",
 };
 
 const receiveStyle: CSSProperties = {
-  background: "rgba(22,163,74,0.12)",
-  color: "#86efac",
-  border: "1px solid rgba(34,197,94,0.24)",
+  background: "rgba(220,252,231,0.95)",
+  color: "#14532d",
+  border: "1px solid rgba(34,197,94,0.32)",
 };
 
 const oweStyle: CSSProperties = {
-  background: "rgba(239,68,68,0.12)",
-  color: "#fca5a5",
-  border: "1px solid rgba(239,68,68,0.24)",
+  background: "rgba(254,226,226,0.95)",
+  color: "#991b1b",
+  border: "1px solid rgba(239,68,68,0.32)",
 };
 
 const settledStyle: CSSProperties = {
   background: "rgba(148,163,184,0.10)",
-  color: "#e2e8f0",
+  color: "#334155",
   border: "1px solid rgba(148,163,184,0.18)",
 };
 
 const buttonStyle: CSSProperties = {
-  minHeight: 46,
-  borderRadius: 14,
-  border: "1px solid rgba(255,255,255,0.14)",
+  minHeight: 44,
+  borderRadius: 12,
+  border: "1px solid rgba(148, 163, 184, 0.45)",
   background: "rgba(59,130,246,0.9)",
   color: "white",
   fontWeight: 800,
-  fontSize: 15,
+  fontSize: "clamp(13px, 3.2vw, 15px)",
   cursor: "pointer",
+  padding: "10px 12px",
 };
 
 const infoTextStyle: CSSProperties = {
-  fontSize: 13,
-  color: "rgba(255,255,255,0.66)",
+  fontSize: "clamp(12px, 2.9vw, 13px)",
+  color: "rgba(15, 23, 42, 0.76)",
   lineHeight: 1.5,
 };
 
 const loadingStyle: CSSProperties = {
   padding: 12,
-  color: "rgba(255,255,255,0.75)",
+  color: "rgba(15, 23, 42, 0.76)",
 };
 
 const emptyWrapStyle: CSSProperties = {
-  border: "1px solid rgba(255,255,255,0.08)",
+  border: "1px solid var(--app-border-subtle, rgba(148, 163, 184, 0.32))",
   borderRadius: 22,
   padding: 18,
-  background: "rgba(255,255,255,0.03)",
+  background: "var(--app-surface-card, rgba(255, 255, 255, 0.94))",
   display: "grid",
   gap: 8,
 };
@@ -693,15 +762,119 @@ const emptyWrapStyle: CSSProperties = {
 const emptyTitleStyle: CSSProperties = {
   fontSize: 18,
   fontWeight: 800,
+  color: "#0f172a",
 };
 
 const emptyTextStyle: CSSProperties = {
   fontSize: 14,
-  color: "rgba(255,255,255,0.68)",
+  color: "rgba(15, 23, 42, 0.58)",
   lineHeight: 1.5,
 };
 
 const emptyMiniStyle: CSSProperties = {
-  fontSize: 14,
-  color: "rgba(255,255,255,0.68)",
+  fontSize: "clamp(12px, 3.1vw, 14px)",
+  color: "rgba(15, 23, 42, 0.58)",
+  lineHeight: 1.4,
+};
+
+const modalOverlayStyle: CSSProperties = {
+  position: "fixed",
+  inset: 0,
+  zIndex: 10050,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: 16,
+  background: "rgba(15, 23, 42, 0.45)",
+  backdropFilter: "blur(4px)",
+  WebkitBackdropFilter: "blur(4px)",
+};
+
+const modalCardStyle: CSSProperties = {
+  width: "100%",
+  maxWidth: 400,
+  borderRadius: 16,
+  padding: "clamp(16px, 4vw, 20px)",
+  background: "var(--app-surface-elevated, #ffffff)",
+  border: "1px solid var(--app-border-subtle, rgba(148, 163, 184, 0.35))",
+  boxShadow: "0 20px 50px rgba(15, 23, 42, 0.15)",
+  color: "#0f172a",
+};
+
+const modalTitleStyle: CSSProperties = {
+  margin: 0,
+  fontSize: "clamp(16px, 3.8vw, 19px)",
+  fontWeight: 800,
+  letterSpacing: "-0.02em",
+  lineHeight: 1.2,
+};
+
+const modalBodyStyle: CSSProperties = {
+  margin: "10px 0 0",
+  fontSize: "clamp(14px, 3.3vw, 15px)",
+  lineHeight: 1.45,
+  color: "rgba(15, 23, 42, 0.88)",
+};
+
+const modalFinePrintStyle: CSSProperties = {
+  margin: "10px 0 0",
+  fontSize: "clamp(12px, 2.9vw, 13px)",
+  lineHeight: 1.45,
+  color: "rgba(15, 23, 42, 0.62)",
+};
+
+const modalWarningBannerStyle: CSSProperties = {
+  marginTop: 12,
+  padding: "10px 12px",
+  borderRadius: 12,
+  border: "1px solid rgba(245, 158, 11, 0.45)",
+  background: "rgba(254, 243, 199, 0.95)",
+  display: "grid",
+  gap: 4,
+};
+
+const modalWarningLabelStyle: CSSProperties = {
+  fontSize: "clamp(10px, 2.5vw, 11px)",
+  fontWeight: 800,
+  letterSpacing: "0.06em",
+  textTransform: "uppercase",
+  color: "#92400e",
+};
+
+const modalWarningTextStyle: CSSProperties = {
+  margin: 0,
+  fontSize: "clamp(12px, 2.9vw, 13px)",
+  lineHeight: 1.4,
+  color: "#78350f",
+  fontWeight: 600,
+};
+
+const modalActionsStyle: CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 10,
+  marginTop: 18,
+  justifyContent: "flex-end",
+};
+
+const modalCancelBtnStyle: CSSProperties = {
+  padding: "9px 12px",
+  borderRadius: 12,
+  border: "1px solid rgba(148, 163, 184, 0.45)",
+  background: "rgba(248, 250, 252, 0.95)",
+  color: "#0f172a",
+  fontWeight: 650,
+  fontSize: "clamp(13px, 3.1vw, 14px)",
+  cursor: "pointer",
+};
+
+const modalConfirmBtnStyle: CSSProperties = {
+  padding: "9px 12px",
+  borderRadius: 12,
+  border: "1px solid rgba(37, 99, 235, 0.45)",
+  background: "linear-gradient(135deg, #60a5fa, #2563eb)",
+  color: "#fff",
+  fontWeight: 750,
+  fontSize: "clamp(13px, 3.1vw, 14px)",
+  cursor: "pointer",
 };

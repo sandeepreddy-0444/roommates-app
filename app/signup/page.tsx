@@ -6,6 +6,7 @@ import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { auth, db } from "@/app/lib/firebase";
+import { MaterialIcon } from "@/components/MaterialIcon";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -40,21 +41,24 @@ export default function SignupPage() {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-6">
-      <div className="w-full max-w-md rounded-2xl border p-6 shadow-sm">
-        <h1 className="text-2xl font-semibold">Roommates</h1>
+    <main className="safe-area min-h-dvh flex items-center justify-center px-6 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] text-slate-900">
+      <div className="w-full max-w-md rounded-[var(--app-radius-sheet)] border border-[var(--app-border-subtle)] bg-[var(--app-surface-elevated)] backdrop-blur-xl p-6 shadow-[var(--app-shadow-sheet)]">
+        <div className="flex justify-center">
+          <MaterialIcon name="person_add" size={40} className="text-blue-600" />
+        </div>
+        <h1 className="text-2xl font-semibold text-center mt-2">Roommates</h1>
         <p className="text-sm text-gray-600 mt-1">Create your account</p>
 
         <form onSubmit={onSubmit} className="mt-6 space-y-4">
           <input
-            className="w-full rounded-xl border p-3"
+            className="w-full rounded-xl border border-[var(--app-border-subtle)] bg-white p-3 text-slate-900"
             placeholder="Name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
           />
           <input
-            className="w-full rounded-xl border p-3"
+            className="w-full rounded-xl border border-[var(--app-border-subtle)] bg-white p-3 text-slate-900"
             type="email"
             placeholder="Email"
             value={email}
@@ -62,7 +66,7 @@ export default function SignupPage() {
             required
           />
           <input
-            className="w-full rounded-xl border p-3"
+            className="w-full rounded-xl border border-[var(--app-border-subtle)] bg-white p-3 text-slate-900"
             type="password"
             placeholder="Password (min 6 chars)"
             value={password}
@@ -74,7 +78,7 @@ export default function SignupPage() {
 
           <button
             disabled={loading}
-            className="w-full rounded-xl bg-black text-white p-3 disabled:opacity-60"
+            className="w-full rounded-xl bg-slate-900 text-white p-3 disabled:opacity-60"
           >
             {loading ? "Creating..." : "Sign up"}
           </button>
@@ -82,7 +86,7 @@ export default function SignupPage() {
 
         <p className="text-sm mt-4">
           Already have an account?{" "}
-          <Link href="/login" className="underline">
+          <Link href="/login" className="underline text-blue-600 font-medium">
             Login
           </Link>
         </p>

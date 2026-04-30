@@ -29,5 +29,9 @@ export default function Home() {
     return () => unsub();
   }, [router]);
 
-  return <div className="p-6">Loading...</div>;
+  return (
+    <div className="safe-area min-h-dvh flex items-center justify-center px-6 text-slate-600">
+      Loading…
+    </div>
+  );
 }

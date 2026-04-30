@@ -1,8 +1,13 @@
 import { onSchedule } from "firebase-functions/v2/scheduler";
+import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import { logger } from "firebase-functions";
 import * as admin from "firebase-admin";
 
 admin.initializeApp();
 const db = admin.firestore();
+
+/** Public URL of the web app (push tap target). Override with APP_ORIGIN when deploying. */
+const DEFAULT_APP_ORIGIN = "https://roommates-b0638.web.app";
 
 /**
  * Runs on the 1st of every month at 12:05 AM America/Chicago.
@@ -60,7 +65,7 @@ export const deleteLastMonthsSettledExpenses = onSchedule(
  *
  * Writes notifications to:
  * groups/{groupId}/notifications
- * Fields match your NotificationsPanel.
+ * (Used for FCM phone push via Cloud Function; no in-app feed.)
  *
  * NOTE: For TESTING this runs every 5 minutes.
  * After testing, change schedule back to: "0 9 * * *"
@@ -216,3 +221,101 @@ function addOneMonthClamped(ymd: string) {
 
   return `${String(ny).padStart(4, "0")}-${String(nm).padStart(2, "0")}-${String(nd).padStart(2, "0")}`;
 }
+
+/**
+ * Sends FCM web push to every roommate when a doc is added under
+ * groups/{groupId}/notifications. Tokens live on users/{uid}.fcmTokens (array).
+ */
+export const pushRoomNotificationToDevices = onDocumentCreated(
+  {
+    document: "groups/{groupId}/notifications/{notifId}",
+    region: "us-central1",
+  },
+  async (event) => {
+    const snap = event.data;
+    if (!snap?.exists) return;
+
+    const { groupId } = event.params as { groupId: string };
+    const data = snap.data() as Record<string, unknown>;
+    const title = String(data.title ?? "Roommates");
+    const body = String(data.body ?? "");
+    const type = String(data.type ?? "info");
+
+    const membersSnap = await db
+      .collection("groups")
+      .doc(groupId)
+      .collection("members")
+      .get();
+
+    const uids = membersSnap.docs.map((d) => d.id);
+    const tokenToUid = new Map<string, string>();
+
+    for (const uid of uids) {
+      const userDoc = await db.collection("users").doc(uid).get();
+      const raw = userDoc.get("fcmTokens") as unknown;
+      if (!Array.isArray(raw)) continue;
+      for (const t of raw) {
+        if (typeof t === "string" && t.length > 20) tokenToUid.set(t, uid);
+      }
+    }
+
+    const tokens = [...tokenToUid.keys()];
+    if (tokens.length === 0) {
+      logger.info("pushRoomNotificationToDevices: no FCM tokens", { groupId });
+      return;
+    }
+
+    const origin = (process.env.APP_ORIGIN || DEFAULT_APP_ORIGIN).replace(/\/$/, "");
+    const link = `${origin}/dashboard`;
+
+    const chunkSize = 500;
+    for (let i = 0; i < tokens.length; i += chunkSize) {
+      const chunk = tokens.slice(i, i + chunkSize);
+      const messages: admin.messaging.Message[] = chunk.map((token) => ({
+        token,
+        notification: { title, body },
+        webpush: {
+          notification: { title, body },
+          fcmOptions: { link },
+        },
+        data: {
+          groupId,
+          type,
+          click_action: link,
+        },
+      }));
+
+      const resp = await admin.messaging().sendEach(messages);
+      logger.info("pushRoomNotificationToDevices: sendEach", {
+        groupId,
+        success: resp.successCount,
+        failure: resp.failureCount,
+      });
+
+      const invalidByUid = new Map<string, string[]>();
+      resp.responses.forEach((r, idx) => {
+        if (r.success) return;
+        const code = r.error?.code;
+        if (
+          code !== "messaging/invalid-registration-token" &&
+          code !== "messaging/registration-token-not-registered"
+        ) {
+          return;
+        }
+        const token = chunk[idx];
+        const uid = token ? tokenToUid.get(token) : undefined;
+        if (!uid || !token) return;
+        const arr = invalidByUid.get(uid) ?? [];
+        arr.push(token);
+        invalidByUid.set(uid, arr);
+      });
+
+      for (const [uid, bad] of invalidByUid) {
+        const ref = db.collection("users").doc(uid);
+        await ref
+          .update({ fcmTokens: admin.firestore.FieldValue.arrayRemove(...bad) })
+          .catch(() => undefined);
+      }
+    }
+  }
+);

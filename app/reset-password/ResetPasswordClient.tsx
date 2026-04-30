@@ -32,30 +32,34 @@ export default function ResetPasswordClient() {
   };
 
   return (
-    <div style={{ minHeight: "100vh", padding: 20, background: "#0b0b0b", color: "white" }}>
-      <div style={{ maxWidth: 420, margin: "0 auto", border: "1px solid #333", borderRadius: 12, padding: 16, background: "#111" }}>
-        <h2>Reset Password</h2>
+    <div className="safe-area min-h-dvh flex items-center justify-center px-5 py-[max(1.25rem,env(safe-area-inset-top))] pb-[max(1.25rem,env(safe-area-inset-bottom))] text-slate-900">
+      <div className="max-w-md w-full rounded-[var(--app-radius-sheet)] border border-[var(--app-border-subtle)] bg-[var(--app-surface-elevated)] backdrop-blur-xl p-5 shadow-[var(--app-shadow-sheet)]">
+        <h2 className="text-xl font-bold tracking-tight text-[#0f172a]">Reset Password</h2>
 
-        <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
+        <div className="grid gap-2.5 mt-3">
           <input
             type="password"
             placeholder="New password"
             value={p1}
             onChange={(e) => setP1(e.target.value)}
-            style={{ padding: 10, borderRadius: 10 }}
+            className="w-full rounded-xl border border-[var(--app-border-subtle)] bg-white p-2.5 text-slate-900"
           />
           <input
             type="password"
             placeholder="Confirm new password"
             value={p2}
             onChange={(e) => setP2(e.target.value)}
-            style={{ padding: 10, borderRadius: 10 }}
+            className="w-full rounded-xl border border-[var(--app-border-subtle)] bg-white p-2.5 text-slate-900"
           />
-          <button onClick={submit} style={{ padding: 10, borderRadius: 10 }}>
+          <button
+            type="button"
+            onClick={submit}
+            className="w-full rounded-xl bg-slate-900 text-white py-2.5 font-semibold"
+          >
             Update Password
           </button>
 
-          {msg && <div style={{ opacity: 0.9 }}>{msg}</div>}
+          {msg && <p className="text-sm text-slate-600">{msg}</p>}
         </div>
       </div>
     </div>

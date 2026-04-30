@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { deleteDoc, doc, updateDoc } from "firebase/firestore";
 import { db } from "@/app/lib/firebase";
+import { coerceToLocalInputDate } from "@/app/lib/dateLocal";
 
 type Expense = {
   id: string;
@@ -13,17 +14,7 @@ type Expense = {
 };
 
 function toInputDate(value: any): string {
-  if (!value) return "";
-  if (typeof value === "string") {
-    return value.slice(0, 10);
-  }
-  if (value instanceof Date) {
-    return value.toISOString().slice(0, 10);
-  }
-  if (value?.toDate) {
-    return value.toDate().toISOString().slice(0, 10);
-  }
-  return "";
+  return coerceToLocalInputDate(value);
 }
 
 export default function ExpenseActions({
@@ -115,7 +106,7 @@ export default function ExpenseActions({
             setOpen(true);
             setErr(null);
           }}
-          className="px-3 py-1 rounded-lg border border-neutral-800 text-sm text-neutral-200 hover:bg-neutral-900"
+          className="px-3 py-1 rounded-lg border border-slate-300/80 text-sm text-slate-700 hover:bg-white/60"
         >
           Edit
         </button>
@@ -126,7 +117,7 @@ export default function ExpenseActions({
             setOpen(true);
             setErr(null);
           }}
-          className="px-3 py-1 rounded-lg border border-neutral-800 text-sm text-red-300 hover:bg-neutral-900"
+          className="px-3 py-1 rounded-lg border border-red-200/80 text-sm text-red-600 hover:bg-red-50/80"
         >
           Delete
         </button>
@@ -135,7 +126,7 @@ export default function ExpenseActions({
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
-            className="absolute inset-0 bg-black/70"
+            className="absolute inset-0 bg-slate-900/25 backdrop-blur-sm"
             onClick={() => {
               if (!saving) {
                 setOpen(false);
@@ -143,27 +134,27 @@ export default function ExpenseActions({
               }
             }}
           />
-          <div className="relative w-full max-w-md rounded-2xl border border-neutral-800 bg-neutral-950 p-5">
+          <div className="relative w-full max-w-md rounded-2xl border border-white/80 bg-white/70 backdrop-blur-xl p-5 shadow-[0_20px_50px_rgba(15,23,42,0.1)] text-slate-900">
             <div className="text-lg font-semibold">
               {mode === "edit" ? "Edit expense" : "Delete expense"}
             </div>
-            <p className="text-sm text-neutral-400 mt-1">
+            <p className="text-sm text-slate-500 mt-1">
               {mode === "edit"
                 ? "Update the details and save."
-                : "This will permanently delete the expense."}
+                : "Are you sure? This will permanently delete this expense for everyone in the room."}
             </p>
 
             {mode === "edit" && (
               <div className="mt-4 space-y-3">
                 <input
-                  className="w-full rounded-xl border border-neutral-800 bg-transparent p-3 text-white placeholder:text-neutral-500 outline-none focus:ring-2 focus:ring-neutral-700"
+                  className="w-full rounded-xl border border-slate-300/80 bg-white/90 p-3 text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-blue-500/30"
                   placeholder="Title"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   disabled={saving}
                 />
                 <input
-                  className="w-full rounded-xl border border-neutral-800 bg-transparent p-3 text-white placeholder:text-neutral-500 outline-none focus:ring-2 focus:ring-neutral-700"
+                  className="w-full rounded-xl border border-slate-300/80 bg-white/90 p-3 text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-blue-500/30"
                   placeholder="Amount"
                   inputMode="decimal"
                   value={amount}
@@ -171,7 +162,7 @@ export default function ExpenseActions({
                   disabled={saving}
                 />
                 <input
-                  className="w-full rounded-xl border border-neutral-800 bg-transparent p-3 text-white outline-none focus:ring-2 focus:ring-neutral-700"
+                  className="w-full rounded-xl border border-slate-300/80 bg-white/90 p-3 text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/30"
                   type="date"
                   value={dateStr}
                   onChange={(e) => setDateStr(e.target.value)}
@@ -191,7 +182,7 @@ export default function ExpenseActions({
                     setMode(null);
                   }
                 }}
-                className="px-4 py-2 rounded-xl border border-neutral-800 text-sm text-neutral-200 hover:bg-neutral-900 disabled:opacity-60"
+                className="px-4 py-2 rounded-xl border border-slate-300/80 text-sm text-slate-700 hover:bg-white/60 disabled:opacity-60"
                 disabled={saving}
               >
                 Cancel
@@ -201,7 +192,7 @@ export default function ExpenseActions({
                 <button
                   type="button"
                   onClick={doSave}
-                  className="px-4 py-2 rounded-xl bg-white text-black text-sm font-semibold disabled:opacity-60"
+                  className="px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-semibold disabled:opacity-60"
                   disabled={saving}
                 >
                   {saving ? "Saving..." : "Save"}
@@ -210,7 +201,7 @@ export default function ExpenseActions({
                 <button
                   type="button"
                   onClick={doDelete}
-                  className="px-4 py-2 rounded-xl bg-red-500 text-black text-sm font-semibold disabled:opacity-60"
+                  className="px-4 py-2 rounded-xl bg-red-500 text-white text-sm font-semibold disabled:opacity-60"
                   disabled={saving}
                 >
                   {saving ? "Deleting..." : "Delete"}

@@ -3,12 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "next dev --webpack",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
+    "@serwist/next": "^9.5.7",
+    "emoji-picker-react": "^4.18.0",
     "firebase": "^12.8.0",
     "next": "16.1.6",
     "openai": "^6.32.0",
@@ -22,6 +24,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "serwist": "^9.5.7",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

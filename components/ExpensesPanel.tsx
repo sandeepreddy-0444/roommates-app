@@ -14,6 +14,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { auth, db } from "@/app/lib/firebase";
+import { toLocalInputDate } from "@/app/lib/dateLocal";
 import ExpenseActions from "@/components/ExpenseActions";
 
 type Expense = {
@@ -69,7 +70,7 @@ export default function ExpensesPanel() {
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
   const [expenseDate, setExpenseDate] = useState(
-    new Date().toISOString().slice(0, 10)
+    toLocalInputDate()
   );
   const [err, setErr] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -335,7 +336,7 @@ export default function ExpensesPanel() {
 
       setTitle("");
       setAmount("");
-      setExpenseDate(new Date().toISOString().slice(0, 10));
+      setExpenseDate(toLocalInputDate());
 
       const resetSelection: Record<string, boolean> = {};
       for (const mate of roommates) resetSelection[mate.uid] = true;
@@ -393,7 +394,7 @@ export default function ExpensesPanel() {
   }
 
   return (
-    <div style={{ display: "grid", gap: 16 }}>
+    <div style={{ display: "grid", gap: 12 }}>
       <div style={introTextStyle}>
         Shared expenses are visible only to the selected participants.
       </div>
@@ -472,7 +473,7 @@ export default function ExpensesPanel() {
                   ...participantCardStyle,
                   border: selectedParticipants[mate.uid]
                     ? "1px solid rgba(96,165,250,0.55)"
-                    : "1px solid rgba(255,255,255,0.08)",
+                    : "1px solid rgba(148, 163, 184, 0.4)",
                   background: selectedParticipants[mate.uid]
                     ? "linear-gradient(135deg, rgba(59,130,246,0.18), rgba(99,102,241,0.12))"
                     : "rgba(255,255,255,0.03)",
@@ -511,11 +512,10 @@ export default function ExpensesPanel() {
               <div style={previewRowStyle}>
                 <span>Visible to</span>
                 <strong>
-                  {
-                    uniqueIds([uid || "", ...selectedRoommates.map((r) => r.uid)])
-                      .length
-                  }{" "}
-                  member(s)
+                  {String(
+                    uniqueIds([uid || "", ...selectedRoommates.map((r) => r.uid)]).length
+                  )}{" "}
+                  members
                 </strong>
               </div>
               <div style={previewRowStyle}>
@@ -526,7 +526,7 @@ export default function ExpensesPanel() {
               {uid ? (
                 <div style={{ ...previewRowStyle, marginTop: 4 }}>
                   <span>If you paid</span>
-                  <strong style={{ color: "#93c5fd" }}>
+                  <strong style={{ color: "#2563eb" }}>
                     Receive ${formatMoney(previewYouReceive)}
                   </strong>
                 </div>
@@ -569,14 +569,14 @@ export default function ExpensesPanel() {
         {expenses.length === 0 ? (
           <div style={emptyStateStyle}>No visible expenses yet.</div>
         ) : (
-          <div style={{ display: "grid", gap: 14 }}>
+          <div style={{ display: "grid", gap: 10 }}>
             {expenses.map((exp) => {
               const breakdown = getExpenseBreakdown(exp);
 
               return (
                 <div key={exp.id} style={expenseCardStyle}>
                   <div style={expenseTopStyle}>
-                    <div style={{ display: "grid", gap: 6 }}>
+                    <div style={{ display: "grid", gap: 2 }}>
                       <div style={expenseTitleStyle}>{exp.title}</div>
 
                       <div style={metaTextStyle}>
@@ -589,7 +589,7 @@ export default function ExpensesPanel() {
 
                       {breakdown.participantIds.length > 0 ? (
                         <div style={metaTextStyle}>
-                          Visible to {breakdown.participantIds.length} member(s)
+                          Visible to {breakdown.participantIds.length} members
                         </div>
                       ) : null}
                     </div>
@@ -658,11 +658,14 @@ export default function ExpensesPanel() {
                       </>
                     )}
 
-                    <div style={{ display: "grid", gap: 6, marginTop: 4 }}>
+                    <div style={{ display: "grid", gap: 4, marginTop: 2 }}>
                       {Object.entries(exp.splitMap || {}).map(([personUid, owed]) => (
                         <div key={personUid} style={splitRowStyle}>
-                          <span>{getName(personUid)} share</span>
-                          <strong>${formatMoney(Number(owed || 0))}</strong>
+                          <span>{getName(personUid)}</span>
+                          <span style={splitRowSepStyle}>·</span>
+                          <strong style={splitRowValueStyle}>
+                            ${formatMoney(Number(owed || 0))}
+                          </strong>
                         </div>
                       ))}
                     </div>
@@ -678,51 +681,51 @@ export default function ExpensesPanel() {
 }
 
 const introTextStyle: CSSProperties = {
-  color: "rgba(255,255,255,0.68)",
+  color: "rgba(15, 23, 42, 0.76)",
   fontSize: 14,
   lineHeight: 1.6,
 };
 
 const panelStyle: CSSProperties = {
-  border: "1px solid rgba(255,255,255,0.08)",
-  borderRadius: 24,
+  border: "1px solid var(--app-border-subtle, rgba(148, 163, 184, 0.32))",
+  borderRadius: 22,
   padding: 18,
-  background:
-    "linear-gradient(180deg, rgba(8,13,28,0.88) 0%, rgba(10,16,34,0.82) 100%)",
-  boxShadow: "0 18px 38px rgba(0,0,0,0.20)",
+  background: "var(--app-surface-elevated, linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%))",
+  boxShadow: "var(--app-shadow-sheet, 0 8px 28px rgba(15, 23, 42, 0.07))",
   display: "grid",
-  gap: 16,
+  gap: 12,
 };
 
 const innerCardStyle: CSSProperties = {
-  border: "1px solid rgba(255,255,255,0.08)",
-  borderRadius: 20,
+  border: "1px solid var(--app-border-subtle, rgba(148, 163, 184, 0.32))",
+  borderRadius: 18,
   padding: 16,
-  background: "rgba(255,255,255,0.03)",
+  background: "var(--app-surface-card, rgba(255, 255, 255, 0.94))",
 };
 
 const sectionHeadingStyle: CSSProperties = {
   fontWeight: 800,
   fontSize: 16,
+  color: "#0f172a",
 };
 
 const helperTextStyle: CSSProperties = {
   fontSize: 13,
-  color: "rgba(255,255,255,0.66)",
+  color: "rgba(15, 23, 42, 0.76)",
   lineHeight: 1.5,
 };
 
 const fieldLabelStyle: CSSProperties = {
   fontSize: 12,
-  color: "rgba(255,255,255,0.68)",
+  color: "rgba(15, 23, 42, 0.72)",
   textTransform: "uppercase",
-  letterSpacing: 0.6,
+  letterSpacing: 0.05,
 };
 
 const formGridStyle: CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-  gap: 14,
+  gap: 10,
 };
 
 const splitHeaderStyle: CSSProperties = {
@@ -734,13 +737,13 @@ const splitHeaderStyle: CSSProperties = {
 };
 
 const inputStyle: CSSProperties = {
-  background: "rgba(5,10,20,0.92)",
-  color: "white",
-  border: "1px solid rgba(255,255,255,0.10)",
+  background: "rgba(255, 255, 255, 0.88)",
+  color: "#0f172a",
+  border: "1px solid rgba(148, 163, 184, 0.4)",
   borderRadius: 14,
   padding: "12px 14px",
   outline: "none",
-  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
+  boxShadow: "inset 0 1px 2px rgba(15, 23, 42, 0.06)",
   fontSize: 14,
 };
 
@@ -766,10 +769,24 @@ const previewCardStyle: CSSProperties = {
 
 const previewRowStyle: CSSProperties = {
   display: "flex",
-  justifyContent: "space-between",
-  gap: 12,
+  flexWrap: "wrap",
   alignItems: "center",
+  columnGap: 6,
+  rowGap: 2,
   fontSize: 14,
+  color: "#0f172a",
+  lineHeight: 1.3,
+};
+
+const splitRowSepStyle: CSSProperties = {
+  opacity: 0.45,
+  fontWeight: 500,
+  userSelect: "none",
+  padding: "0 1px",
+};
+
+const splitRowValueStyle: CSSProperties = {
+  fontVariantNumeric: "tabular-nums",
 };
 
 const primaryBtnStyle: CSSProperties = {
@@ -786,11 +803,11 @@ const primaryBtnStyle: CSSProperties = {
 };
 
 const secondaryBtnStyle: CSSProperties = {
-  border: "1px solid rgba(255,255,255,0.10)",
+  border: "1px solid rgba(148, 163, 184, 0.4)",
   borderRadius: 12,
   padding: "9px 12px",
-  background: "rgba(255,255,255,0.04)",
-  color: "white",
+  background: "rgba(255, 255, 255, 0.55)",
+  color: "#0f172a",
   cursor: "pointer",
   fontWeight: 700,
   transition: "all 0.2s ease",
@@ -807,62 +824,64 @@ const errorStyle: CSSProperties = {
 };
 
 const summaryCardStyle: CSSProperties = {
-  border: "1px solid rgba(255,255,255,0.08)",
+  border: "1px solid rgba(255, 255, 255, 0.75)",
   borderRadius: 24,
   padding: 18,
   background:
-    "linear-gradient(135deg, rgba(15,23,42,0.9), rgba(30,41,59,0.85))",
-  boxShadow: "0 18px 38px rgba(0,0,0,0.18)",
+    "linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(241,245,249,0.75) 100%)",
+  boxShadow: "0 16px 36px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.8)",
   display: "grid",
-  gap: 14,
+  gap: 10,
 };
 
 const summaryGridStyle: CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-  gap: 14,
+  gap: 10,
 };
 
 const summaryItemStyle: CSSProperties = {
-  border: "1px solid rgba(255,255,255,0.08)",
+  border: "1px solid rgba(148, 163, 184, 0.4)",
   borderRadius: 18,
   padding: 16,
-  background: "rgba(255,255,255,0.03)",
+  background: "rgba(255, 255, 255, 0.5)",
 };
 
 const summaryLabelStyle: CSSProperties = {
   fontSize: 11,
-  color: "rgba(255,255,255,0.68)",
-  marginBottom: 8,
+  color: "rgba(15, 23, 42, 0.72)",
+  marginBottom: 4,
   textTransform: "uppercase",
-  letterSpacing: 0.6,
+  letterSpacing: 0.05,
 };
 
 const summaryValueStyle: CSSProperties = {
   fontSize: 20,
   fontWeight: 900,
-  lineHeight: 1.15,
+  lineHeight: 1.12,
+  color: "#0f172a",
+  fontVariantNumeric: "tabular-nums",
 };
 
 const emptyStateStyle: CSSProperties = {
-  color: "rgba(255,255,255,0.68)",
+  color: "rgba(15, 23, 42, 0.76)",
   padding: "10px 2px",
 };
 
 const expenseCardStyle: CSSProperties = {
-  border: "1px solid rgba(255,255,255,0.08)",
-  borderRadius: 20,
-  padding: 16,
-  background: "rgba(255,255,255,0.03)",
+  border: "1px solid var(--app-border-subtle, rgba(148, 163, 184, 0.32))",
+  borderRadius: 18,
+  padding: 14,
+  background: "var(--app-surface-card, rgba(255, 255, 255, 0.94))",
   display: "grid",
-  gap: 14,
+  gap: 10,
 };
 
 const expenseTopStyle: CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "flex-start",
-  gap: 14,
+  gap: 10,
   flexWrap: "wrap",
 };
 
@@ -870,12 +889,13 @@ const expenseTitleStyle: CSSProperties = {
   fontWeight: 900,
   fontSize: 16,
   lineHeight: 1.2,
+  color: "#0f172a",
 };
 
 const metaTextStyle: CSSProperties = {
   fontSize: 13,
-  color: "rgba(255,255,255,0.66)",
-  lineHeight: 1.5,
+  color: "rgba(15, 23, 42, 0.76)",
+  lineHeight: 1.3,
 };
 
 const expenseTopRightStyle: CSSProperties = {
@@ -886,30 +906,32 @@ const expenseTopRightStyle: CSSProperties = {
 };
 
 const amountPillStyle: CSSProperties = {
-  padding: "10px 14px",
+  padding: "8px 12px",
   borderRadius: 999,
   fontWeight: 900,
   fontSize: 15,
+  color: "#1e3a8a",
   background:
     "linear-gradient(135deg, rgba(99,102,241,0.26), rgba(59,130,246,0.22))",
   border: "1px solid rgba(129,140,248,0.26)",
+  fontVariantNumeric: "tabular-nums",
 };
 
 const breakdownCardStyle: CSSProperties = {
-  border: "1px solid rgba(255,255,255,0.08)",
+  border: "1px solid rgba(148, 163, 184, 0.35)",
   borderRadius: 18,
-  padding: 14,
-  background: "rgba(6,10,22,0.76)",
+  padding: 12,
+  background: "rgba(255, 255, 255, 0.65)",
   display: "grid",
-  gap: 10,
+  gap: 6,
 };
 
 const statusGoodStyle: CSSProperties = {
   borderRadius: 14,
   padding: "10px 12px",
-  background: "rgba(22,163,74,0.18)",
-  border: "1px solid rgba(74,222,128,0.24)",
-  color: "#bbf7d0",
+  background: "rgba(220,252,231,0.95)",
+  border: "1px solid rgba(34,197,94,0.35)",
+  color: "#14532d",
   fontWeight: 700,
   fontSize: 14,
 };
@@ -917,9 +939,9 @@ const statusGoodStyle: CSSProperties = {
 const statusWarnStyle: CSSProperties = {
   borderRadius: 14,
   padding: "10px 12px",
-  background: "rgba(217,119,6,0.16)",
-  border: "1px solid rgba(251,191,36,0.22)",
-  color: "#fde68a",
+  background: "rgba(254,243,199,0.95)",
+  border: "1px solid rgba(245,158,11,0.4)",
+  color: "#9a3412",
   fontWeight: 700,
   fontSize: 14,
 };
@@ -929,15 +951,18 @@ const statusNeutralStyle: CSSProperties = {
   padding: "10px 12px",
   background: "rgba(148,163,184,0.12)",
   border: "1px solid rgba(148,163,184,0.18)",
-  color: "#e2e8f0",
+  color: "#334155",
   fontWeight: 700,
   fontSize: 14,
 };
 
 const splitRowStyle: CSSProperties = {
   display: "flex",
-  justifyContent: "space-between",
-  gap: 12,
+  flexWrap: "wrap",
+  alignItems: "center",
+  columnGap: 4,
+  rowGap: 0,
   fontSize: 14,
-  lineHeight: 1.5,
+  lineHeight: 1.3,
+  color: "#0f172a",
 };

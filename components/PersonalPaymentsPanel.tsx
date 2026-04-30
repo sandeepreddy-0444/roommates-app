@@ -15,6 +15,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { auth, db } from "@/app/lib/firebase";
+import { toLocalInputDate } from "@/app/lib/dateLocal";
 
 type Roommate = {
   uid: string;
@@ -54,7 +55,7 @@ export default function PersonalPaymentsPanel() {
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [paymentDate, setPaymentDate] = useState(
-    new Date().toISOString().slice(0, 10)
+    toLocalInputDate()
   );
   const [err, setErr] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -199,7 +200,7 @@ export default function PersonalPaymentsPanel() {
       setToUid("");
       setAmount("");
       setNote("");
-      setPaymentDate(new Date().toISOString().slice(0, 10));
+      setPaymentDate(toLocalInputDate());
     } catch (e: any) {
       setErr(e?.message ?? "Failed to add personal payment.");
     } finally {
@@ -247,7 +248,7 @@ export default function PersonalPaymentsPanel() {
   }
 
   return (
-    <div style={{ display: "grid", gap: 16 }}>
+    <div style={{ display: "grid", gap: 12 }}>
       <div style={introTextStyle}>
         Personal payments are private. Only you and the other person can see them.
       </div>
@@ -343,7 +344,7 @@ export default function PersonalPaymentsPanel() {
         {payments.length === 0 ? (
           <div style={emptyStateStyle}>No personal payments yet.</div>
         ) : (
-          <div style={{ display: "grid", gap: 14 }}>
+          <div style={{ display: "grid", gap: 10 }}>
             {payments.map((payment) => {
               const canMark = payment.fromUid === uid || isAdmin;
               const isRepaid = payment.status === "repaid";
@@ -351,7 +352,7 @@ export default function PersonalPaymentsPanel() {
               return (
                 <div key={payment.id} style={expenseCardStyle}>
                   <div style={expenseTopStyle}>
-                    <div style={{ display: "grid", gap: 6 }}>
+                    <div style={{ display: "grid", gap: 2 }}>
                       <div style={expenseTitleStyle}>
                         {getName(payment.toUid)} borrowed from {getName(payment.fromUid)}
                       </div>
@@ -414,44 +415,44 @@ export default function PersonalPaymentsPanel() {
 }
 
 const introTextStyle: CSSProperties = {
-  color: "rgba(255,255,255,0.68)",
+  color: "var(--app-text-secondary)",
   fontSize: 14,
   lineHeight: 1.6,
 };
 
 const panelStyle: CSSProperties = {
-  border: "1px solid rgba(255,255,255,0.08)",
-  borderRadius: 24,
+  border: "1px solid var(--app-border-subtle, rgba(148, 163, 184, 0.32))",
+  borderRadius: 22,
   padding: 18,
-  background:
-    "linear-gradient(180deg, rgba(8,13,28,0.88) 0%, rgba(10,16,34,0.82) 100%)",
-  boxShadow: "0 18px 38px rgba(0,0,0,0.20)",
+  background: "var(--app-surface-elevated, linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%))",
+  boxShadow: "var(--app-shadow-sheet, 0 8px 28px rgba(15, 23, 42, 0.07))",
   display: "grid",
-  gap: 16,
+  gap: 12,
 };
 
 const sectionHeadingStyle: CSSProperties = {
   fontWeight: 800,
   fontSize: 16,
+  color: "var(--app-text-primary)",
 };
 
 const fieldLabelStyle: CSSProperties = {
   fontSize: 12,
-  color: "rgba(255,255,255,0.68)",
+  color: "var(--app-text-secondary)",
   textTransform: "uppercase",
-  letterSpacing: 0.6,
+  letterSpacing: 0.05,
 };
 
 const formGridStyle: CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-  gap: 14,
+  gap: 10,
 };
 
 const inputStyle: CSSProperties = {
-  background: "rgba(5,10,20,0.92)",
-  color: "white",
-  border: "1px solid rgba(255,255,255,0.10)",
+  background: "var(--app-input-surface, rgba(255, 255, 255, 0.95))",
+  color: "var(--app-text-primary)",
+  border: "1px solid rgba(148, 163, 184, 0.4)",
   borderRadius: 14,
   padding: "12px 14px",
   outline: "none",
@@ -479,62 +480,64 @@ const errorStyle: CSSProperties = {
 };
 
 const summaryCardStyle: CSSProperties = {
-  border: "1px solid rgba(255,255,255,0.08)",
+  border: "1px solid rgba(255, 255, 255, 0.75)",
   borderRadius: 24,
   padding: 18,
   background:
-    "linear-gradient(135deg, rgba(15,23,42,0.9), rgba(30,41,59,0.85))",
-  boxShadow: "0 18px 38px rgba(0,0,0,0.18)",
+    "linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(241,245,249,0.75) 100%)",
+  boxShadow: "0 16px 36px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.8)",
   display: "grid",
-  gap: 14,
+  gap: 10,
 };
 
 const summaryGridStyle: CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-  gap: 14,
+  gap: 10,
 };
 
 const summaryItemStyle: CSSProperties = {
-  border: "1px solid rgba(255,255,255,0.08)",
+  border: "1px solid rgba(148, 163, 184, 0.4)",
   borderRadius: 18,
-  padding: 16,
-  background: "rgba(255,255,255,0.03)",
+  padding: 14,
+  background: "rgba(255, 255, 255, 0.5)",
 };
 
 const summaryLabelStyle: CSSProperties = {
   fontSize: 11,
-  color: "rgba(255,255,255,0.68)",
-  marginBottom: 8,
+  color: "var(--app-text-muted)",
+  marginBottom: 4,
   textTransform: "uppercase",
-  letterSpacing: 0.6,
+  letterSpacing: 0.05,
 };
 
 const summaryValueStyle: CSSProperties = {
   fontSize: 20,
   fontWeight: 900,
-  lineHeight: 1.15,
+  lineHeight: 1.12,
+  fontVariantNumeric: "tabular-nums",
+  color: "var(--app-text-primary)",
 };
 
 const emptyStateStyle: CSSProperties = {
-  color: "rgba(255,255,255,0.68)",
+  color: "var(--app-text-secondary)",
   padding: "10px 2px",
 };
 
 const expenseCardStyle: CSSProperties = {
-  border: "1px solid rgba(255,255,255,0.08)",
+  border: "1px solid rgba(148, 163, 184, 0.4)",
   borderRadius: 20,
-  padding: 16,
-  background: "rgba(255,255,255,0.03)",
+  padding: 14,
+  background: "rgba(255, 255, 255, 0.5)",
   display: "grid",
-  gap: 14,
+  gap: 10,
 };
 
 const expenseTopStyle: CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "flex-start",
-  gap: 14,
+  gap: 10,
   flexWrap: "wrap",
 };
 
@@ -542,12 +545,13 @@ const expenseTitleStyle: CSSProperties = {
   fontWeight: 900,
   fontSize: 16,
   lineHeight: 1.2,
+  color: "var(--app-text-primary)",
 };
 
 const metaTextStyle: CSSProperties = {
   fontSize: 13,
-  color: "rgba(255,255,255,0.66)",
-  lineHeight: 1.5,
+  color: "var(--app-text-secondary)",
+  lineHeight: 1.3,
 };
 
 const expenseTopRightStyle: CSSProperties = {
@@ -558,13 +562,15 @@ const expenseTopRightStyle: CSSProperties = {
 };
 
 const amountPillStyle: CSSProperties = {
-  padding: "10px 14px",
+  padding: "8px 12px",
   borderRadius: 999,
   fontWeight: 900,
   fontSize: 15,
+  color: "var(--app-text-primary)",
   background:
     "linear-gradient(135deg, rgba(99,102,241,0.26), rgba(59,130,246,0.22))",
   border: "1px solid rgba(129,140,248,0.26)",
+  fontVariantNumeric: "tabular-nums",
 };
 
 const statusNeutralStyle: CSSProperties = {
@@ -572,13 +578,13 @@ const statusNeutralStyle: CSSProperties = {
   padding: "10px 12px",
   background: "rgba(148,163,184,0.12)",
   border: "1px solid rgba(148,163,184,0.18)",
-  color: "#e2e8f0",
+  color: "var(--app-text-primary)",
   fontWeight: 700,
   fontSize: 14,
 };
 
 const helperTextStyle: CSSProperties = {
   fontSize: 13,
-  color: "rgba(255,255,255,0.66)",
+  color: "var(--app-text-secondary)",
   lineHeight: 1.5,
 };

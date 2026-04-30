@@ -85,13 +85,6 @@ export default function RemindersPanel({ groupId }: { groupId: string }) {
 
   return (
     <div style={{ display: "grid", gap: 18 }}>
-      <div>
-        <h2 style={{ margin: 0, fontSize: 28 }}>Reminders</h2>
-        <div style={{ marginTop: 6, color: "rgba(255,255,255,0.68)" }}>
-          Keep track of recurring bills and important room-related dates.
-        </div>
-      </div>
-
       <div style={panelStyle}>
         <div style={sectionHeadingStyle}>Create reminder</div>
 
@@ -160,7 +153,7 @@ export default function RemindersPanel({ groupId }: { groupId: string }) {
                         background: r.isActive
                           ? "rgba(34,197,94,0.14)"
                           : "rgba(148,163,184,0.12)",
-                        color: r.isActive ? "#86efac" : "#cbd5e1",
+                        color: r.isActive ? "#166534" : "#475569",
                         border: r.isActive
                           ? "1px solid rgba(34,197,94,0.22)"
                           : "1px solid rgba(148,163,184,0.18)",
@@ -200,12 +193,11 @@ export default function RemindersPanel({ groupId }: { groupId: string }) {
 }
 
 const panelStyle: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,0.08)",
-  borderRadius: 24,
+  border: "1px solid var(--app-border-subtle, rgba(148, 163, 184, 0.32))",
+  borderRadius: 22,
   padding: 20,
-  background:
-    "linear-gradient(180deg, rgba(8,13,28,0.88) 0%, rgba(10,16,34,0.82) 100%)",
-  boxShadow: "0 18px 38px rgba(0,0,0,0.20)",
+  background: "var(--app-surface-elevated, linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%))",
+  boxShadow: "var(--app-shadow-sheet, 0 8px 28px rgba(15, 23, 42, 0.07))",
   display: "grid",
   gap: 16,
 };
@@ -213,11 +205,13 @@ const panelStyle: React.CSSProperties = {
 const sectionHeadingStyle: React.CSSProperties = {
   fontWeight: 800,
   fontSize: 18,
+  color: "#0f172a",
+  letterSpacing: "-0.02em",
 };
 
 const fieldLabelStyle: React.CSSProperties = {
   fontSize: 12,
-  color: "rgba(255,255,255,0.68)",
+  color: "rgba(15, 23, 42, 0.72)",
   textTransform: "uppercase",
   letterSpacing: 0.6,
 };
@@ -229,13 +223,13 @@ const formGridStyle: React.CSSProperties = {
 };
 
 const inputStyle: React.CSSProperties = {
-  background: "rgba(5,10,20,0.92)",
-  color: "white",
-  border: "1px solid rgba(255,255,255,0.10)",
+  background: "rgba(255, 255, 255, 0.88)",
+  color: "#0f172a",
+  border: "1px solid rgba(148, 163, 184, 0.4)",
   borderRadius: 14,
   padding: "12px 14px",
   outline: "none",
-  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
+  boxShadow: "inset 0 1px 2px rgba(15, 23, 42, 0.06)",
 };
 
 const primaryBtnStyle: React.CSSProperties = {
@@ -251,29 +245,29 @@ const primaryBtnStyle: React.CSSProperties = {
 };
 
 const secondaryBtnStyle: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,0.10)",
+  border: "1px solid rgba(148, 163, 184, 0.4)",
   borderRadius: 12,
   padding: "9px 12px",
-  background: "rgba(255,255,255,0.04)",
-  color: "white",
+  background: "rgba(255, 255, 255, 0.55)",
+  color: "#0f172a",
   cursor: "pointer",
   fontWeight: 700,
   transition: "all 0.2s ease",
 };
 
 const dangerGhostBtnStyle: React.CSSProperties = {
-  border: "1px solid rgba(248,113,113,0.28)",
+  border: "1px solid rgba(248,113,113,0.45)",
   borderRadius: 12,
   padding: "9px 12px",
-  background: "rgba(127,29,29,0.16)",
-  color: "#fca5a5",
+  background: "rgba(254,226,226,0.9)",
+  color: "#991b1b",
   cursor: "pointer",
   fontWeight: 700,
   transition: "all 0.2s ease",
 };
 
 const emptyStateStyle: React.CSSProperties = {
-  color: "rgba(255,255,255,0.68)",
+  color: "rgba(15, 23, 42, 0.58)",
   padding: "10px 2px",
 };
 
@@ -282,21 +276,22 @@ const reminderCardStyle: React.CSSProperties = {
   justifyContent: "space-between",
   alignItems: "center",
   gap: 14,
-  border: "1px solid rgba(255,255,255,0.08)",
+  border: "1px solid rgba(148, 163, 184, 0.4)",
   borderRadius: 18,
   padding: 16,
-  background: "rgba(255,255,255,0.03)",
+  background: "rgba(255, 255, 255, 0.5)",
   flexWrap: "wrap",
 };
 
 const reminderTitleStyle: React.CSSProperties = {
   fontWeight: 800,
   fontSize: 17,
+  color: "#0f172a",
 };
 
 const metaTextStyle: React.CSSProperties = {
   fontSize: 13,
-  color: "rgba(255,255,255,0.66)",
+  color: "rgba(15, 23, 42, 0.76)",
 };
 
 const statusBadgeStyle: React.CSSProperties = {

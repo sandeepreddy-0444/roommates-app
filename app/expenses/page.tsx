@@ -201,43 +201,56 @@ const settleUps = useMemo(() => {
   }
 
   return (
-    <main className="min-h-screen p-6">
-      <div className="max-w-3xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
+    <main className="safe-area min-h-dvh px-5 py-[max(1.25rem,env(safe-area-inset-top))] pb-[max(1.25rem,env(safe-area-inset-bottom))] text-slate-900">
+      <div className="max-w-3xl mx-auto space-y-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold">Expenses</h1>
-            <p className="text-sm text-gray-600">Room: {groupId}</p>
+            <h1 className="text-2xl font-semibold tracking-tight text-[#0f172a]">Expenses</h1>
+            <p className="text-sm text-slate-600 mt-0.5">Room: {groupId}</p>
           </div>
-          <div className="flex gap-2">
-            <Link href="/grocery" className="border px-4 py-2 rounded">
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/grocery"
+              className="rounded-xl border border-[var(--app-border-subtle)] bg-[var(--app-surface-card)] px-3 py-2 text-sm font-medium shadow-sm"
+            >
               Grocery
             </Link>
-            <Link href="/room" className="border px-4 py-2 rounded">
+            <Link
+              href="/room"
+              className="rounded-xl border border-[var(--app-border-subtle)] bg-[var(--app-surface-card)] px-3 py-2 text-sm font-medium shadow-sm"
+            >
               Room
             </Link>
-            <button onClick={logout} className="border px-4 py-2 rounded">
+            <button
+              type="button"
+              onClick={logout}
+              className="rounded-xl border border-[var(--app-border-subtle)] bg-white px-3 py-2 text-sm font-medium"
+            >
               Logout
             </button>
           </div>
         </div>
 
-        <form onSubmit={addExpense} className="border rounded-2xl p-4 space-y-3">
+        <form
+          onSubmit={addExpense}
+          className="rounded-[var(--app-radius-sheet)] border border-[var(--app-border-subtle)] bg-[var(--app-surface-elevated)] p-4 space-y-3 shadow-[var(--app-shadow-sheet)]"
+        >
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <input
-              className="rounded-xl border p-3"
+              className="rounded-xl border border-[var(--app-border-subtle)] bg-white p-3 min-h-[46px]"
               placeholder="Title (ex: Chicken, Milk)"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
             />
             <input
-              className="rounded-xl border p-3"
+              className="rounded-xl border border-[var(--app-border-subtle)] bg-white p-3 min-h-[46px]"
               placeholder="Amount (ex: 12.50)"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               inputMode="decimal"
             />
             <select
-              className="rounded-xl border p-3"
+              className="rounded-xl border border-[var(--app-border-subtle)] bg-white p-3 min-h-[46px]"
               value={paidBy}
               onChange={(e) => setPaidBy(e.target.value)}
             >
@@ -254,65 +267,82 @@ const settleUps = useMemo(() => {
 
           {msg && <p className="text-sm text-red-600">{msg}</p>}
 
-          <button className="rounded-xl bg-black text-white px-4 py-3">
+          <button
+            type="submit"
+            className="w-full md:w-auto rounded-xl bg-slate-900 text-white px-4 py-3 min-h-[46px] font-semibold shadow-md"
+          >
             Add Expense (split equal)
           </button>
         </form>
 
-        <div className="border rounded-2xl p-4">
-          <h2 className="font-semibold">Balances</h2>
-          <p className="text-sm text-gray-600 mt-1">
+        <div className="rounded-[var(--app-radius-sheet)] border border-[var(--app-border-subtle)] bg-[var(--app-surface-card)] p-4 shadow-[var(--app-shadow-sheet)]">
+          <h2 className="font-semibold text-[#0f172a]">Balances</h2>
+          <p className="text-sm text-slate-600 mt-1">
             Positive = should receive money • Negative = owes money
           </p>
 
-          <div className="mt-3 space-y-2">
+          <div className="mt-3 space-y-1.5">
             {members.map((m) => (
-              <div key={m.uid} className="flex justify-between border-b py-2">
-                <div>{m.name}</div>
-                <div className="font-mono">
+              <div
+                key={m.uid}
+                className="flex flex-wrap items-baseline gap-x-2 border-b border-[var(--app-border-subtle)] py-1.5"
+              >
+                <span className="min-w-0 font-medium text-[#0f172a]">{m.name}</span>
+                <span className="font-mono tabular-nums text-slate-800">
                   {balances[m.uid] ? balances[m.uid].toFixed(2) : "0.00"}
-                </div>
+                </span>
               </div>
             ))}
-            {members.length === 0 && <p className="text-gray-600">No members found.</p>}
+            {members.length === 0 && <p className="text-slate-600">No members found.</p>}
           </div>
         </div>
-        <div className="border rounded-2xl p-4">
-  <h2 className="font-semibold">Who owes who</h2>
-  <p className="text-sm text-gray-600 mt-1">
-    Suggested payments to settle everything
-  </p>
+        <div className="rounded-[var(--app-radius-sheet)] border border-[var(--app-border-subtle)] bg-[var(--app-surface-card)] p-4 shadow-[var(--app-shadow-sheet)]">
+          <h2 className="font-semibold text-[#0f172a]">Who owes who</h2>
+          <p className="text-sm text-slate-600 mt-1">
+            Suggested payments to settle everything
+          </p>
 
-  <div className="mt-3 space-y-2">
-    {settleUps.length === 0 ? (
-      <p className="text-gray-600">All settled ✅</p>
-    ) : (
-      settleUps.map((t, idx) => (
-        <div key={idx} className="flex justify-between border-b py-2">
-          <div>
-            <span className="font-medium">{nameOf(t.from)}</span> pays{" "}
-            <span className="font-medium">{nameOf(t.to)}</span>
+          <div className="mt-3 space-y-1.5">
+            {settleUps.length === 0 ? (
+              <p className="text-slate-600">All settled ✅</p>
+            ) : (
+              settleUps.map((t, idx) => (
+                <div
+                  key={idx}
+                  className="flex flex-wrap items-baseline gap-x-2 border-b border-[var(--app-border-subtle)] py-1.5"
+                >
+                  <span className="inline-flex min-w-0 flex-wrap items-baseline gap-x-1 text-sm text-slate-800">
+                    <span className="font-medium">{nameOf(t.from)}</span>
+                    <span className="text-slate-400">→</span>
+                    <span className="font-medium">{nameOf(t.to)}</span>
+                    <span className="text-slate-300">·</span>
+                    <span className="font-mono font-semibold tabular-nums text-slate-900">
+                      ${t.amount.toFixed(2)}
+                    </span>
+                  </span>
+                </div>
+              ))
+            )}
           </div>
-          <div className="font-mono">${t.amount.toFixed(2)}</div>
         </div>
-      ))
-    )}
-  </div>
-</div>
 
-
-        <div className="space-y-3">
-          <h2 className="font-semibold">Recent expenses</h2>
+        <div className="space-y-3 pb-2">
+          <h2 className="font-semibold text-[#0f172a]">Recent expenses</h2>
           {expenses.length === 0 ? (
-            <p className="text-gray-600">No expenses yet. Add your first one ☝️</p>
+            <p className="text-slate-600">No expenses yet. Add your first one ☝️</p>
           ) : (
             expenses.map((ex) => (
-              <div key={ex.id} className="border rounded-2xl p-4 flex justify-between">
-                <div>
+              <div
+                key={ex.id}
+                className="flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-[var(--app-radius-card)] border border-[var(--app-border-subtle)] bg-[var(--app-surface-card)] p-3 shadow-[var(--app-shadow-sheet)]"
+              >
+                <div className="min-w-0">
                   <div className="font-medium">{ex.title}</div>
-                  <div className="text-sm text-gray-600">Paid by: {nameOf(ex.paidBy)}</div>
+                  <div className="text-sm text-slate-600">Paid by: {nameOf(ex.paidBy)}</div>
                 </div>
-                <div className="font-mono">${ex.amount.toFixed(2)}</div>
+                <div className="font-mono text-[15px] font-semibold tabular-nums text-slate-900">
+                  ${ex.amount.toFixed(2)}
+                </div>
               </div>
             ))
           )}

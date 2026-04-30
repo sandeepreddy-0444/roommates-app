@@ -1,8 +1,400 @@
 @import "tailwindcss";
 
 :root {
-  --background: #07111f;
-  --foreground: #ffffff;
+  --background: #ffffff;
+  --foreground: #0f172a;
+  --glass-surface: rgba(255, 255, 255, 0.58);
+  --glass-surface-strong: rgba(255, 255, 255, 0.78);
+  --glass-border: rgba(255, 255, 255, 0.92);
+  --glass-border-muted: rgba(148, 163, 184, 0.42);
+  --glass-blur: blur(22px) saturate(160%);
+  --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+  --glass-shadow: 0 12px 40px rgba(15, 23, 42, 0.08);
+  /* Native-like surfaces (shared across dashboard tool panels) */
+  --app-surface-elevated: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
+  --app-surface-card: rgba(255, 255, 255, 0.94);
+  --app-border-subtle: rgba(148, 163, 184, 0.32);
+  --app-shadow-sheet: 0 8px 28px rgba(15, 23, 42, 0.07);
+  --app-radius-sheet: 22px;
+  --app-radius-card: 18px;
+
+  /* Dashboard theme tokens (default: Light) */
+  --app-theme-color: #f8fafc;
+  --app-text-primary: #0f172a;
+  --app-text-secondary: rgba(15, 23, 42, 0.68);
+  --app-text-muted: rgba(15, 23, 42, 0.45);
+  --app-text-subtle: rgba(15, 23, 42, 0.58);
+  --app-page-bg: #f8fafc;
+  /* Home shell: warm sunset (top-left → bottom-right), reference-inspired */
+  --app-home-gradient: linear-gradient(
+    135deg,
+    #f8a15b 0%,
+    #c16698 48%,
+    #5e3b8e 100%
+  );
+  --app-home-sheet-bg: #faf6f2;
+  --app-home-sheet-shadow: 0 -12px 44px rgba(45, 20, 75, 0.14);
+  --app-home-hero-font: Georgia, "Times New Roman", serif;
+  --app-home-hero-text-shadow: 0 1px 3px rgba(255, 255, 255, 0.45);
+  --app-hero-border: rgba(99, 102, 241, 0.14);
+  --app-hero-bg: linear-gradient(
+    145deg,
+    rgba(238, 242, 255, 0.98) 0%,
+    rgba(224, 231, 255, 0.55) 40%,
+    rgba(255, 255, 255, 0.85) 100%
+  );
+  --app-hero-shadow: 0 20px 50px rgba(79, 70, 229, 0.08), 0 1px 0 rgba(255, 255, 255, 0.9) inset;
+  --app-hero-kicker: rgba(79, 70, 229, 0.75);
+  --app-hero-chip-fg: #312e81;
+  --app-hero-icon: #4f46e5;
+  --app-accent: #2563eb;
+  --app-accent-bright: #60a5fa;
+  --app-accent-pressed: #1d4ed8;
+  --app-accent-shadow: 37, 99, 235;
+  --app-nav-active-bg: rgba(59, 130, 246, 0.16);
+  --app-nav-active-border: rgba(59, 130, 246, 0.25);
+  --app-nav-icon-muted: rgb(100, 116, 139);
+  --app-mini-primary-bg: rgba(59, 130, 246, 0.14);
+  --app-mini-primary-border: rgba(59, 130, 246, 0.45);
+  --app-mini-primary-text: #1e3a8a;
+  --app-tile-icon: #2563eb;
+  --app-avatar-shadow: 0 8px 22px rgba(37, 99, 235, 0.25);
+  --app-primary-btn-shadow: 0 8px 20px rgba(37, 99, 235, 0.3);
+  --app-tab-bar-bg: rgba(255, 255, 255, 0.86);
+  --app-tab-bar-border: rgba(255, 255, 255, 0.9);
+  --app-floating-card-bg: rgba(255, 255, 255, 0.82);
+  --app-tool-tile-label: rgba(15, 23, 42, 0.9);
+  --app-secondary-surface: rgba(255, 255, 255, 0.72);
+  --app-ghost-surface: rgba(248, 250, 252, 0.8);
+  --app-input-surface: rgba(255, 255, 255, 0.75);
+  --app-icon-button-bg: rgba(255, 255, 255, 0.95);
+  --app-icon-muted: #64748b;
+}
+
+/* Dark */
+html[data-app-theme="dark"] {
+  --background: #0b1020;
+  --foreground: #f1f5f9;
+  --app-theme-color: #0b1020;
+  --app-text-primary: #f1f5f9;
+  --app-text-secondary: rgba(241, 245, 249, 0.72);
+  --app-text-muted: rgba(241, 245, 249, 0.5);
+  --app-text-subtle: rgba(203, 213, 225, 0.75);
+  --app-page-bg: #0b1020;
+  --app-home-gradient: linear-gradient(135deg, #3d2560 0%, #241a3d 50%, #0f0a18 100%);
+  --app-home-sheet-bg: rgba(22, 18, 36, 0.92);
+  --app-home-sheet-shadow: 0 -12px 40px rgba(0, 0, 0, 0.45);
+  --app-home-hero-text-shadow: 0 2px 10px rgba(0, 0, 0, 0.55);
+  --app-hero-border: rgba(139, 92, 246, 0.25);
+  --app-hero-bg: linear-gradient(145deg, rgba(30, 27, 60, 0.95) 0%, rgba(15, 23, 42, 0.92) 100%);
+  --app-hero-shadow: 0 20px 50px rgba(0, 0, 0, 0.45), 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+  --app-hero-kicker: rgba(196, 181, 253, 0.9);
+  --app-hero-chip-fg: #ede9fe;
+  --app-hero-icon: #a78bfa;
+  --app-accent: #a78bfa;
+  --app-accent-bright: #c4b5fd;
+  --app-accent-pressed: #7c3aed;
+  --app-accent-shadow: 139, 92, 246;
+  --app-nav-active-bg: rgba(139, 92, 246, 0.22);
+  --app-nav-active-border: rgba(139, 92, 246, 0.35);
+  --app-nav-icon-muted: rgba(203, 213, 225, 0.55);
+  --app-mini-primary-bg: rgba(139, 92, 246, 0.2);
+  --app-mini-primary-border: rgba(167, 139, 250, 0.45);
+  --app-mini-primary-text: #ede9fe;
+  --app-tile-icon: #a78bfa;
+  --app-surface-elevated: linear-gradient(180deg, #1a2235 0%, #111827 100%);
+  --app-surface-card: rgba(30, 41, 59, 0.94);
+  --app-border-subtle: rgba(148, 163, 184, 0.22);
+  --app-shadow-sheet: 0 8px 28px rgba(0, 0, 0, 0.4);
+  --app-tab-bar-bg: rgba(17, 24, 39, 0.92);
+  --app-tab-bar-border: rgba(148, 163, 184, 0.15);
+  --app-floating-card-bg: rgba(30, 41, 59, 0.88);
+  --app-tool-tile-label: rgba(241, 245, 249, 0.92);
+  --app-avatar-shadow: 0 8px 24px rgba(139, 92, 246, 0.35);
+  --app-primary-btn-shadow: 0 8px 20px rgba(124, 58, 237, 0.35);
+  --app-secondary-surface: rgba(30, 41, 59, 0.78);
+  --app-ghost-surface: rgba(15, 23, 42, 0.55);
+  --app-input-surface: rgba(15, 23, 42, 0.72);
+  --app-icon-button-bg: rgba(30, 41, 59, 0.9);
+  --app-icon-muted: #94a3b8;
+}
+
+/* Ocean */
+html[data-app-theme="ocean"] {
+  --app-theme-color: #ecfeff;
+  --app-text-primary: #0f172a;
+  --app-text-secondary: rgba(15, 23, 42, 0.68);
+  --app-text-muted: rgba(15, 23, 42, 0.45);
+  --app-text-subtle: rgba(15, 23, 42, 0.58);
+  --app-page-bg: #ecfeff;
+  --app-home-gradient: linear-gradient(180deg, #e0f2fe 0%, #ecfeff 22%, #f8fafc 100%);
+  --app-hero-border: rgba(6, 182, 212, 0.2);
+  --app-hero-bg: linear-gradient(145deg, rgba(224, 242, 254, 0.98) 0%, rgba(204, 251, 241, 0.55) 45%, rgba(255, 255, 255, 0.9) 100%);
+  --app-hero-shadow: 0 20px 50px rgba(6, 182, 212, 0.1), 0 1px 0 rgba(255, 255, 255, 0.9) inset;
+  --app-hero-kicker: rgba(8, 145, 178, 0.85);
+  --app-hero-chip-fg: #155e75;
+  --app-hero-icon: #0d9488;
+  --app-accent: #0d9488;
+  --app-accent-bright: #2dd4bf;
+  --app-accent-pressed: #0f766e;
+  --app-accent-shadow: 13, 148, 136;
+  --app-nav-active-bg: rgba(13, 148, 136, 0.16);
+  --app-nav-active-border: rgba(13, 148, 136, 0.28);
+  --app-nav-icon-muted: rgb(100, 116, 139);
+  --app-mini-primary-bg: rgba(13, 148, 136, 0.12);
+  --app-mini-primary-border: rgba(13, 148, 136, 0.4);
+  --app-mini-primary-text: #115e59;
+  --app-tile-icon: #0d9488;
+  --app-surface-elevated: linear-gradient(180deg, #ffffff 0%, #e0f2fe 100%);
+  --app-surface-card: rgba(255, 255, 255, 0.96);
+  --app-floating-card-bg: rgba(255, 255, 255, 0.9);
+  --app-tool-tile-label: rgba(15, 23, 42, 0.9);
+  --app-avatar-shadow: 0 8px 22px rgba(13, 148, 136, 0.28);
+  --app-primary-btn-shadow: 0 8px 20px rgba(13, 148, 136, 0.28);
+}
+
+/* Lavender */
+html[data-app-theme="lavender"] {
+  --app-theme-color: #f5f3ff;
+  --app-text-primary: #0f172a;
+  --app-text-secondary: rgba(15, 23, 42, 0.68);
+  --app-text-muted: rgba(15, 23, 42, 0.45);
+  --app-text-subtle: rgba(15, 23, 42, 0.58);
+  --app-page-bg: #f5f3ff;
+  --app-home-gradient: linear-gradient(180deg, #ede9fe 0%, #f5f3ff 25%, #fafafa 100%);
+  --app-hero-border: rgba(124, 58, 237, 0.16);
+  --app-hero-bg: linear-gradient(145deg, rgba(237, 233, 254, 0.98) 0%, rgba(221, 214, 254, 0.5) 45%, rgba(255, 255, 255, 0.9) 100%);
+  --app-hero-shadow: 0 20px 50px rgba(124, 58, 237, 0.09), 0 1px 0 rgba(255, 255, 255, 0.9) inset;
+  --app-hero-kicker: rgba(109, 40, 217, 0.78);
+  --app-hero-chip-fg: #5b21b6;
+  --app-hero-icon: #7c3aed;
+  --app-accent: #7c3aed;
+  --app-accent-bright: #a78bfa;
+  --app-accent-pressed: #6d28d9;
+  --app-accent-shadow: 124, 58, 237;
+  --app-nav-active-bg: rgba(124, 58, 237, 0.16);
+  --app-nav-active-border: rgba(124, 58, 237, 0.28);
+  --app-nav-icon-muted: rgb(100, 116, 139);
+  --app-mini-primary-bg: rgba(124, 58, 237, 0.1);
+  --app-mini-primary-border: rgba(124, 58, 237, 0.38);
+  --app-mini-primary-text: #5b21b6;
+  --app-tile-icon: #7c3aed;
+  --app-surface-elevated: linear-gradient(180deg, #ffffff 0%, #f5f3ff 100%);
+  --app-surface-card: rgba(255, 255, 255, 0.95);
+  --app-floating-card-bg: rgba(255, 255, 255, 0.9);
+  --app-tool-tile-label: rgba(15, 23, 42, 0.9);
+  --app-avatar-shadow: 0 8px 22px rgba(124, 58, 237, 0.22);
+  --app-primary-btn-shadow: 0 8px 20px rgba(124, 58, 237, 0.25);
+}
+
+/* Forest */
+html[data-app-theme="forest"] {
+  --app-theme-color: #ecfdf5;
+  --app-text-primary: #0f172a;
+  --app-text-secondary: rgba(15, 23, 42, 0.68);
+  --app-text-muted: rgba(15, 23, 42, 0.45);
+  --app-text-subtle: rgba(15, 23, 42, 0.58);
+  --app-page-bg: #ecfdf5;
+  --app-home-gradient: linear-gradient(180deg, #d1fae5 0%, #ecfdf5 25%, #f8fafc 100%);
+  --app-hero-border: rgba(5, 150, 105, 0.18);
+  --app-hero-bg: linear-gradient(145deg, rgba(209, 250, 229, 0.98) 0%, rgba(167, 243, 208, 0.5) 45%, rgba(255, 255, 255, 0.9) 100%);
+  --app-hero-shadow: 0 20px 50px rgba(5, 150, 105, 0.1), 0 1px 0 rgba(255, 255, 255, 0.9) inset;
+  --app-hero-kicker: rgba(5, 120, 85, 0.82);
+  --app-hero-chip-fg: #14532d;
+  --app-hero-icon: #15803d;
+  --app-accent: #15803d;
+  --app-accent-bright: #22c55e;
+  --app-accent-pressed: #166534;
+  --app-accent-shadow: 21, 128, 61;
+  --app-nav-active-bg: rgba(21, 128, 61, 0.14);
+  --app-nav-active-border: rgba(21, 128, 61, 0.28);
+  --app-nav-icon-muted: rgb(100, 116, 139);
+  --app-mini-primary-bg: rgba(21, 128, 61, 0.1);
+  --app-mini-primary-border: rgba(21, 128, 61, 0.38);
+  --app-mini-primary-text: #14532d;
+  --app-tile-icon: #15803d;
+  --app-surface-elevated: linear-gradient(180deg, #ffffff 0%, #ecfdf5 100%);
+  --app-surface-card: rgba(255, 255, 255, 0.95);
+  --app-floating-card-bg: rgba(255, 255, 255, 0.9);
+  --app-tool-tile-label: rgba(15, 23, 42, 0.9);
+  --app-avatar-shadow: 0 8px 22px rgba(21, 128, 61, 0.25);
+  --app-primary-btn-shadow: 0 8px 20px rgba(21, 128, 61, 0.28);
+}
+
+/* Sunset — warm peach / coral */
+html[data-app-theme="sunset"] {
+  --app-theme-color: #fff7ed;
+  --app-text-primary: #0f172a;
+  --app-text-secondary: rgba(15, 23, 42, 0.68);
+  --app-text-muted: rgba(15, 23, 42, 0.45);
+  --app-text-subtle: rgba(15, 23, 42, 0.58);
+  --app-page-bg: #fff7ed;
+  --app-home-gradient: linear-gradient(
+    135deg,
+    #ffb366 0%,
+    #d87ba8 45%,
+    #6b4890 100%
+  );
+  --app-home-sheet-bg: #fff8f2;
+  --app-hero-border: rgba(234, 88, 12, 0.2);
+  --app-hero-bg: linear-gradient(145deg, rgba(255, 237, 213, 0.98) 0%, rgba(254, 215, 170, 0.5) 45%, rgba(255, 255, 255, 0.92) 100%);
+  --app-hero-shadow: 0 20px 50px rgba(234, 88, 12, 0.1), 0 1px 0 rgba(255, 255, 255, 0.9) inset;
+  --app-hero-kicker: rgba(194, 65, 12, 0.82);
+  --app-hero-chip-fg: #9a3412;
+  --app-hero-icon: #ea580c;
+  --app-accent: #ea580c;
+  --app-accent-bright: #fb923c;
+  --app-accent-pressed: #c2410c;
+  --app-accent-shadow: 234, 88, 12;
+  --app-nav-active-bg: rgba(234, 88, 12, 0.14);
+  --app-nav-active-border: rgba(234, 88, 12, 0.28);
+  --app-nav-icon-muted: rgb(100, 116, 139);
+  --app-mini-primary-bg: rgba(234, 88, 12, 0.1);
+  --app-mini-primary-border: rgba(234, 88, 12, 0.38);
+  --app-mini-primary-text: #9a3412;
+  --app-tile-icon: #ea580c;
+  --app-surface-elevated: linear-gradient(180deg, #ffffff 0%, #fff7ed 100%);
+  --app-surface-card: rgba(255, 255, 255, 0.95);
+  --app-floating-card-bg: rgba(255, 255, 255, 0.9);
+  --app-tool-tile-label: rgba(15, 23, 42, 0.9);
+  --app-avatar-shadow: 0 8px 22px rgba(234, 88, 12, 0.26);
+  --app-primary-btn-shadow: 0 8px 20px rgba(234, 88, 12, 0.28);
+}
+
+/* Rose — blush / pink */
+html[data-app-theme="rose"] {
+  --app-theme-color: #fdf2f8;
+  --app-text-primary: #0f172a;
+  --app-text-secondary: rgba(15, 23, 42, 0.68);
+  --app-text-muted: rgba(15, 23, 42, 0.45);
+  --app-text-subtle: rgba(15, 23, 42, 0.58);
+  --app-page-bg: #fdf2f8;
+  --app-home-gradient: linear-gradient(180deg, #fce7f3 0%, #fdf2f8 26%, #fafafa 100%);
+  --app-hero-border: rgba(225, 29, 72, 0.16);
+  --app-hero-bg: linear-gradient(145deg, rgba(252, 231, 243, 0.98) 0%, rgba(251, 207, 232, 0.5) 45%, rgba(255, 255, 255, 0.92) 100%);
+  --app-hero-shadow: 0 20px 50px rgba(225, 29, 72, 0.08), 0 1px 0 rgba(255, 255, 255, 0.9) inset;
+  --app-hero-kicker: rgba(190, 24, 93, 0.78);
+  --app-hero-chip-fg: #9f1239;
+  --app-hero-icon: #e11d48;
+  --app-accent: #e11d48;
+  --app-accent-bright: #fb7185;
+  --app-accent-pressed: #be123c;
+  --app-accent-shadow: 225, 29, 72;
+  --app-nav-active-bg: rgba(225, 29, 72, 0.14);
+  --app-nav-active-border: rgba(225, 29, 72, 0.26);
+  --app-nav-icon-muted: rgb(100, 116, 139);
+  --app-mini-primary-bg: rgba(225, 29, 72, 0.1);
+  --app-mini-primary-border: rgba(225, 29, 72, 0.35);
+  --app-mini-primary-text: #9f1239;
+  --app-tile-icon: #e11d48;
+  --app-surface-elevated: linear-gradient(180deg, #ffffff 0%, #fdf2f8 100%);
+  --app-surface-card: rgba(255, 255, 255, 0.95);
+  --app-floating-card-bg: rgba(255, 255, 255, 0.9);
+  --app-tool-tile-label: rgba(15, 23, 42, 0.9);
+  --app-avatar-shadow: 0 8px 22px rgba(225, 29, 72, 0.22);
+  --app-primary-btn-shadow: 0 8px 20px rgba(225, 29, 72, 0.25);
+}
+
+/* Amber — warm gold */
+html[data-app-theme="amber"] {
+  --app-theme-color: #fffbeb;
+  --app-text-primary: #0f172a;
+  --app-text-secondary: rgba(15, 23, 42, 0.68);
+  --app-text-muted: rgba(15, 23, 42, 0.45);
+  --app-text-subtle: rgba(15, 23, 42, 0.58);
+  --app-page-bg: #fffbeb;
+  --app-home-gradient: linear-gradient(180deg, #fef3c7 0%, #fffbeb 26%, #fafaf9 100%);
+  --app-hero-border: rgba(217, 119, 6, 0.2);
+  --app-hero-bg: linear-gradient(145deg, rgba(254, 243, 199, 0.98) 0%, rgba(253, 230, 138, 0.55) 45%, rgba(255, 255, 255, 0.92) 100%);
+  --app-hero-shadow: 0 20px 50px rgba(217, 119, 6, 0.1), 0 1px 0 rgba(255, 255, 255, 0.9) inset;
+  --app-hero-kicker: rgba(180, 83, 9, 0.82);
+  --app-hero-chip-fg: #92400e;
+  --app-hero-icon: #d97706;
+  --app-accent: #d97706;
+  --app-accent-bright: #fbbf24;
+  --app-accent-pressed: #b45309;
+  --app-accent-shadow: 217, 119, 6;
+  --app-nav-active-bg: rgba(217, 119, 6, 0.14);
+  --app-nav-active-border: rgba(217, 119, 6, 0.28);
+  --app-nav-icon-muted: rgb(100, 116, 139);
+  --app-mini-primary-bg: rgba(217, 119, 6, 0.1);
+  --app-mini-primary-border: rgba(217, 119, 6, 0.36);
+  --app-mini-primary-text: #92400e;
+  --app-tile-icon: #d97706;
+  --app-surface-elevated: linear-gradient(180deg, #ffffff 0%, #fffbeb 100%);
+  --app-surface-card: rgba(255, 255, 255, 0.95);
+  --app-floating-card-bg: rgba(255, 255, 255, 0.9);
+  --app-tool-tile-label: rgba(15, 23, 42, 0.9);
+  --app-avatar-shadow: 0 8px 22px rgba(217, 119, 6, 0.25);
+  --app-primary-btn-shadow: 0 8px 20px rgba(217, 119, 6, 0.28);
+}
+
+/* Slate — cool gray & blue-gray accent */
+html[data-app-theme="slate"] {
+  --app-theme-color: #f1f5f9;
+  --app-text-primary: #0f172a;
+  --app-text-secondary: rgba(15, 23, 42, 0.68);
+  --app-text-muted: rgba(15, 23, 42, 0.45);
+  --app-text-subtle: rgba(15, 23, 42, 0.58);
+  --app-page-bg: #f1f5f9;
+  --app-home-gradient: linear-gradient(180deg, #e2e8f0 0%, #f1f5f9 30%, #f8fafc 100%);
+  --app-hero-border: rgba(71, 85, 105, 0.2);
+  --app-hero-bg: linear-gradient(145deg, rgba(241, 245, 249, 0.98) 0%, rgba(226, 232, 240, 0.65) 45%, rgba(255, 255, 255, 0.92) 100%);
+  --app-hero-shadow: 0 20px 50px rgba(51, 65, 85, 0.08), 0 1px 0 rgba(255, 255, 255, 0.85) inset;
+  --app-hero-kicker: rgba(51, 65, 85, 0.78);
+  --app-hero-chip-fg: #1e293b;
+  --app-hero-icon: #475569;
+  --app-accent: #475569;
+  --app-accent-bright: #64748b;
+  --app-accent-pressed: #334155;
+  --app-accent-shadow: 71, 85, 105;
+  --app-nav-active-bg: rgba(71, 85, 105, 0.12);
+  --app-nav-active-border: rgba(71, 85, 105, 0.25);
+  --app-nav-icon-muted: rgb(100, 116, 139);
+  --app-mini-primary-bg: rgba(71, 85, 105, 0.1);
+  --app-mini-primary-border: rgba(71, 85, 105, 0.32);
+  --app-mini-primary-text: #1e293b;
+  --app-tile-icon: #475569;
+  --app-surface-elevated: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
+  --app-surface-card: rgba(255, 255, 255, 0.95);
+  --app-floating-card-bg: rgba(255, 255, 255, 0.9);
+  --app-tool-tile-label: rgba(15, 23, 42, 0.9);
+  --app-avatar-shadow: 0 8px 22px rgba(51, 65, 85, 0.2);
+  --app-primary-btn-shadow: 0 8px 20px rgba(51, 65, 85, 0.22);
+}
+
+/* Berry — plum / magenta */
+html[data-app-theme="berry"] {
+  --app-theme-color: #faf5ff;
+  --app-text-primary: #0f172a;
+  --app-text-secondary: rgba(15, 23, 42, 0.68);
+  --app-text-muted: rgba(15, 23, 42, 0.45);
+  --app-text-subtle: rgba(15, 23, 42, 0.58);
+  --app-page-bg: #faf5ff;
+  --app-home-gradient: linear-gradient(180deg, #f3e8ff 0%, #faf5ff 26%, #fafafa 100%);
+  --app-hero-border: rgba(162, 28, 175, 0.18);
+  --app-hero-bg: linear-gradient(145deg, rgba(243, 232, 255, 0.98) 0%, rgba(233, 213, 255, 0.5) 45%, rgba(255, 255, 255, 0.92) 100%);
+  --app-hero-shadow: 0 20px 50px rgba(162, 28, 175, 0.1), 0 1px 0 rgba(255, 255, 255, 0.9) inset;
+  --app-hero-kicker: rgba(134, 25, 143, 0.82);
+  --app-hero-chip-fg: #86198f;
+  --app-hero-icon: #a21caf;
+  --app-accent: #a21caf;
+  --app-accent-bright: #d946ef;
+  --app-accent-pressed: #86198f;
+  --app-accent-shadow: 162, 28, 175;
+  --app-nav-active-bg: rgba(162, 28, 175, 0.12);
+  --app-nav-active-border: rgba(162, 28, 175, 0.28);
+  --app-nav-icon-muted: rgb(100, 116, 139);
+  --app-mini-primary-bg: rgba(162, 28, 175, 0.1);
+  --app-mini-primary-border: rgba(162, 28, 175, 0.35);
+  --app-mini-primary-text: #86198f;
+  --app-tile-icon: #a21caf;
+  --app-surface-elevated: linear-gradient(180deg, #ffffff 0%, #faf5ff 100%);
+  --app-surface-card: rgba(255, 255, 255, 0.95);
+  --app-floating-card-bg: rgba(255, 255, 255, 0.9);
+  --app-tool-tile-label: rgba(15, 23, 42, 0.9);
+  --app-avatar-shadow: 0 8px 22px rgba(162, 28, 175, 0.24);
+  --app-primary-btn-shadow: 0 8px 20px rgba(162, 28, 175, 0.26);
 }
 
 @theme inline {
@@ -12,14 +404,35 @@
   --font-mono: var(--font-geist-mono);
 }
 
+html {
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 html,
 body {
   margin: 0;
   padding: 0;
   overflow-x: hidden;
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  min-height: 100dvh;
+  color: var(--app-text-primary, var(--foreground));
+  /* System UI first (iOS / Android), then Geist when loaded via layout */
+  font-family:
+    var(--font-geist-sans, ui-sans-serif),
+    -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Text",
+    "SF Pro Display",
+    "Segoe UI",
+    Roboto,
+    "Helvetica Neue",
+    Arial,
+    sans-serif;
+  background-color: var(--app-page-bg, #f8fafc);
+  background-image: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 * {
@@ -28,4 +441,53 @@ body {
 
 .safe-area {
   min-height: 100dvh;
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+/* Momentum scrolling for overflow regions that opt in */
+.app-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+
+/* Profile → Appearance: compact theme chips */
+button.app-theme-tile {
+  transition:
+    box-shadow 0.18s ease,
+    transform 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+button.app-theme-tile[aria-checked="false"]:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+}
+html[data-app-theme="dark"] button.app-theme-tile[aria-checked="false"]:hover {
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+button.app-theme-tile:active {
+  transform: translateY(0) scale(0.97);
+}
+
+/* Google Material Symbols Outlined — see https://fonts.google.com/icons */
+.material-symbols-outlined {
+  font-family: "Material Symbols Outlined";
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  font-feature-settings: "liga";
+  -webkit-font-smoothing: antialiased;
+  vertical-align: middle;
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 400,
+    "GRAD" 0,
+    "opsz" 24;
 }

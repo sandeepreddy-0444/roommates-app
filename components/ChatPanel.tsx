@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import EmojiPicker, { EmojiStyle, Theme } from "emoji-picker-react";
 import { onAuthStateChanged } from "firebase/auth";
 import {
   addDoc,
@@ -23,6 +25,7 @@ import {
   uploadBytes,
 } from "firebase/storage";
 import { auth, db, storage } from "@/app/lib/firebase";
+import { MaterialIcon } from "@/components/MaterialIcon";
 
 type Message = {
   id: string;
@@ -38,6 +41,41 @@ type Message = {
 const MOBILE_BREAKPOINT = 900;
 const MESSAGE_LIMIT = 80;
 
+/** Resize large photos before upload (mobile-friendly, fewer failures on slow networks). */
+async function compressImageForChat(file: File): Promise<File> {
+  if (!file.type.startsWith("image/") || typeof createImageBitmap !== "function") {
+    return file;
+  }
+  try {
+    const bitmap = await createImageBitmap(file);
+    const maxEdge = 1600;
+    const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
+    const w = Math.max(1, Math.round(bitmap.width * scale));
+    const h = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      bitmap.close?.();
+      return file;
+    }
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    bitmap.close?.();
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, "image/jpeg", 0.82);
+    });
+    if (!blob || blob.size >= file.size * 0.95) return file;
+    const base = file.name.replace(/\.[^.]+$/, "") || "photo";
+    return new File([blob], `${base}.jpg`, {
+      type: "image/jpeg",
+      lastModified: Date.now(),
+    });
+  } catch {
+    return file;
+  }
+}
+
 export default function ChatPanel() {
   const [uid, setUid] = useState<string | null>(null);
   const [groupId, setGroupId] = useState<string | null>(null);
@@ -47,6 +85,7 @@ export default function ChatPanel() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
@@ -54,6 +93,8 @@ export default function ChatPanel() {
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const pendingComposerCursorRef = useRef<number | null>(null);
   const messagesAreaRef = useRef<HTMLDivElement | null>(null);
   const prevMessageCountRef = useRef(0);
 
@@ -143,6 +184,43 @@ export default function ChatPanel() {
     }
   };
 
+  function clearAttachment() {
+    setFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function insertEmojiAtCursor(emoji: string) {
+    const ta = composerTextareaRef.current;
+    if (!ta) {
+      setText((prev) => prev + emoji);
+      return;
+    }
+    const start = ta.selectionStart ?? ta.value.length;
+    const end = ta.selectionEnd ?? ta.value.length;
+    const v = ta.value;
+    const next = v.slice(0, start) + emoji + v.slice(end);
+    pendingComposerCursorRef.current = start + [...emoji].length;
+    setText(next);
+  }
+
+  useLayoutEffect(() => {
+    const ta = composerTextareaRef.current;
+    const pos = pendingComposerCursorRef.current;
+    if (ta == null || pos == null) return;
+    pendingComposerCursorRef.current = null;
+    ta.focus();
+    ta.setSelectionRange(pos, pos);
+  }, [text]);
+
+  useEffect(() => {
+    if (!emojiPickerOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setEmojiPickerOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [emojiPickerOpen]);
+
   const sendMessage = async () => {
     if (!groupId || !uid || sending) return;
     if (!text.trim() && !file) return;
@@ -154,11 +232,12 @@ export default function ChatPanel() {
       let imagePath = "";
 
       if (file) {
-        const safeName = `${Date.now()}-${file.name}`;
+        const uploadFile = await compressImageForChat(file);
+        const safeName = `${Date.now()}-${uploadFile.name}`;
         imagePath = `chatImages/${groupId}/${safeName}`;
         const storageRef = ref(storage, imagePath);
 
-        await uploadBytes(storageRef, file);
+        await uploadBytes(storageRef, uploadFile);
         imageUrl = await getDownloadURL(storageRef);
       }
 
@@ -253,21 +332,14 @@ export default function ChatPanel() {
   }
 
   return (
-    <div style={{ display: "grid", gap: 18, minWidth: 0 }}>
-      <div>
-        <h2 style={chatTitleStyle}>Room Chat</h2>
-        <div style={chatSubtitleStyle}>
-          Stay connected with your roommates in one shared space.
-        </div>
-      </div>
-
+    <div style={{ display: "grid", gap: 0, minWidth: 0 }}>
       <div style={chatShellStyle}>
         <div style={chatHeaderStyle}>
           <div>
-            <div style={chatSectionTitleStyle}>Conversation</div>
+            <div style={chatSectionTitleStyle}>Messages</div>
             <div style={subtleTextStyle}>
               {messages.length === 0
-                ? "No messages yet"
+                ? "Your room’s thread. Say hi or share a photo below."
                 : `${messages.length} recent message${
                     messages.length === 1 ? "" : "s"
                   }`}
@@ -282,12 +354,12 @@ export default function ChatPanel() {
         >
           {messages.length === 0 ? (
             <div style={emptyChatStateStyle}>
-              <div style={{ fontSize: 40 }}>💬</div>
-              <p style={{ fontSize: 18, margin: 0, fontWeight: 700 }}>
-                No messages yet
-              </p>
-              <p style={{ fontSize: 13, margin: 0, opacity: 0.72 }}>
-                Start the conversation with your roommates!
+              <div style={emptyStateIconWrapStyle} aria-hidden>
+                <MaterialIcon name="chat_bubble" size={36} style={{ color: "rgba(37, 99, 235, 0.55)" }} />
+              </div>
+              <p style={emptyStateTitleStyle}>Nothing here yet</p>
+              <p style={emptyStateSubStyle}>
+                Send a message or add a photo—everyone in the room will see it.
               </p>
             </div>
           ) : (
@@ -426,6 +498,7 @@ export default function ChatPanel() {
           </div>
 
           <textarea
+            ref={composerTextareaRef}
             placeholder="Type a message"
             value={text}
             onChange={(e) => setText(e.target.value)}
@@ -439,25 +512,103 @@ export default function ChatPanel() {
             style={composerTextareaStyle}
           />
 
-          <div style={fileRowStyle}>
+          <div style={composerToolsRowStyle}>
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/gif,image/webp"
+              aria-label="Choose image to attach"
               onChange={(e) => {
                 if (e.target.files && e.target.files[0]) {
                   setFile(e.target.files[0]);
                 }
               }}
-              style={fileInputStyle}
+              style={fileInputHiddenStyle}
+              tabIndex={-1}
             />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              style={composerAttachCompactStyle}
+              aria-label="Attach image (JPG, PNG, GIF, WebP)"
+              title="Attach image"
+            >
+              <MaterialIcon name="add_photo_alternate" size={22} style={{ color: "#1d4ed8" }} />
+            </button>
 
-            {file && (
-              <div style={fileChipStyle}>
-                Selected: <strong>{file.name}</strong>
-              </div>
-            )}
+            <button
+              type="button"
+              onClick={() => setEmojiPickerOpen(true)}
+              style={composerAttachCompactStyle}
+              aria-label="Open emoji picker"
+              title="Emoji"
+            >
+              <MaterialIcon name="emoji_emotions" size={24} style={{ color: "#1d4ed8" }} />
+            </button>
           </div>
+
+          {emojiPickerOpen
+            ? createPortal(
+                <div
+                  style={emojiPickerOverlayStyle}
+                  onClick={() => setEmojiPickerOpen(false)}
+                  role="presentation"
+                >
+                  <div
+                    role="dialog"
+                    aria-label="Emoji picker"
+                    style={emojiPickerDialogStyle}
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  >
+                    <div style={emojiPickerHeaderStyle}>
+                      <span style={emojiPickerTitleStyle}>Emoji</span>
+                      <button
+                        type="button"
+                        onClick={() => setEmojiPickerOpen(false)}
+                        style={emojiPickerCloseBtnStyle}
+                        aria-label="Close emoji picker"
+                      >
+                        <MaterialIcon name="close" size={22} style={{ color: "#475569" }} />
+                      </button>
+                    </div>
+                    <div style={emojiPickerBodyStyle}>
+                      <EmojiPicker
+                        onEmojiClick={(d) => {
+                          insertEmojiAtCursor(d.emoji);
+                          setEmojiPickerOpen(false);
+                        }}
+                        theme={Theme.LIGHT}
+                        emojiStyle={EmojiStyle.NATIVE}
+                        width="100%"
+                        height={400}
+                        searchPlaceHolder="Search emojis"
+                        previewConfig={{ showPreview: true }}
+                        autoFocusSearch={false}
+                        style={{ width: "100%" }}
+                      />
+                    </div>
+                  </div>
+                </div>,
+                document.body
+              )
+            : null}
+
+          {file ? (
+            <div style={fileChipCompactStyle}>
+              <span style={fileChipNameStyle} title={file.name}>
+                {file.name}
+              </span>
+              <button
+                type="button"
+                onClick={clearAttachment}
+                style={fileChipClearStyle}
+                aria-label="Remove attachment"
+              >
+                <MaterialIcon name="close" size={18} style={{ color: "#64748b" }} />
+              </button>
+            </div>
+          ) : null}
 
           <div style={{ display: "flex", justifyContent: "flex-end" }}>
             <button
@@ -480,25 +631,14 @@ export default function ChatPanel() {
   );
 }
 
-const chatTitleStyle: React.CSSProperties = {
-  margin: 0,
-  fontSize: "clamp(22px, 4vw, 28px)",
-};
-
-const chatSubtitleStyle: React.CSSProperties = {
-  marginTop: 6,
-  color: "rgba(255,255,255,0.68)",
-  fontSize: 14,
-  lineHeight: 1.5,
-};
-
 const chatShellStyle: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,0.08)",
+  border: "1px solid rgba(255, 255, 255, 0.75)",
   borderRadius: 24,
   padding: "clamp(14px, 3vw, 18px)",
   background:
-    "linear-gradient(180deg, rgba(8,13,28,0.88) 0%, rgba(10,16,34,0.82) 100%)",
-  boxShadow: "0 18px 38px rgba(0,0,0,0.20)",
+    "linear-gradient(180deg, rgba(255,255,255,0.78) 0%, rgba(241,245,249,0.55) 100%)",
+  boxShadow:
+    "0 16px 36px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.85)",
   display: "grid",
   gap: 16,
   minWidth: 0,
@@ -519,12 +659,12 @@ const chatSectionTitleStyle: React.CSSProperties = {
 
 const subtleTextStyle: React.CSSProperties = {
   fontSize: 13,
-  color: "rgba(255,255,255,0.66)",
+  color: "rgba(15, 23, 42, 0.76)",
   lineHeight: 1.5,
 };
 
 const messagesAreaStyle: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,0.08)",
+  border: "1px solid rgba(148, 163, 184, 0.4)",
   borderRadius: 20,
   padding: 12,
   minHeight: 340,
@@ -532,7 +672,7 @@ const messagesAreaStyle: React.CSSProperties = {
   overflowY: "auto",
   overflowX: "hidden",
   background:
-    "linear-gradient(180deg, rgba(5,10,20,0.96) 0%, rgba(8,14,26,0.94) 100%)",
+    "linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(248,250,252,0.92) 100%)",
   minWidth: 0,
   WebkitOverflowScrolling: "touch",
   overscrollBehavior: "contain",
@@ -543,8 +683,36 @@ const emptyChatStateStyle: React.CSSProperties = {
   display: "grid",
   placeItems: "center",
   textAlign: "center",
-  gap: 8,
-  opacity: 0.9,
+  gap: 10,
+  padding: "12px 8px",
+  opacity: 0.95,
+};
+
+const emptyStateIconWrapStyle: React.CSSProperties = {
+  display: "grid",
+  placeItems: "center",
+  width: 72,
+  height: 72,
+  borderRadius: 20,
+  background: "linear-gradient(180deg, rgba(219, 234, 254, 0.9), rgba(255, 255, 255, 0.6))",
+  border: "1px solid rgba(59, 130, 246, 0.22)",
+  boxShadow: "0 6px 16px rgba(37, 99, 235, 0.08)",
+};
+
+const emptyStateTitleStyle: React.CSSProperties = {
+  fontSize: 18,
+  margin: 0,
+  fontWeight: 800,
+  letterSpacing: -0.2,
+  color: "#0f172a",
+};
+
+const emptyStateSubStyle: React.CSSProperties = {
+  fontSize: 14,
+  margin: 0,
+  maxWidth: 280,
+  lineHeight: 1.5,
+  color: "rgba(15, 23, 42, 0.58)",
 };
 
 const bubbleStyle: React.CSSProperties = {
@@ -553,7 +721,7 @@ const bubbleStyle: React.CSSProperties = {
   maxWidth: "92%",
   borderRadius: 18,
   padding: "14px 14px 12px",
-  border: "1px solid rgba(255,255,255,0.08)",
+  border: "1px solid rgba(148, 163, 184, 0.4)",
   minWidth: 0,
   wordBreak: "break-word",
   overflowWrap: "anywhere",
@@ -566,7 +734,7 @@ const myBubbleStyle: React.CSSProperties = {
 };
 
 const theirBubbleStyle: React.CSSProperties = {
-  background: "rgba(255,255,255,0.04)",
+  background: "rgba(255, 255, 255, 0.55)",
 };
 
 const bubbleTopStyle: React.CSSProperties = {
@@ -585,7 +753,7 @@ const bubbleNameStyle: React.CSSProperties = {
 const menuTriggerStyle: React.CSSProperties = {
   background: "transparent",
   border: "none",
-  color: "white",
+  color: "#0f172a",
   fontSize: 18,
   cursor: "pointer",
   lineHeight: 1,
@@ -599,13 +767,15 @@ const menuCardStyle: React.CSSProperties = {
   position: "absolute",
   top: 28,
   right: 0,
-  background: "rgba(10,16,30,0.98)",
-  border: "1px solid rgba(255,255,255,0.10)",
+  background: "rgba(255, 255, 255, 0.95)",
+  backdropFilter: "blur(12px)",
+  WebkitBackdropFilter: "blur(12px)",
+  border: "1px solid rgba(148, 163, 184, 0.35)",
   borderRadius: 12,
   minWidth: 110,
   zIndex: 10,
   overflow: "hidden",
-  boxShadow: "0 16px 30px rgba(0,0,0,0.24)",
+  boxShadow: "0 16px 30px rgba(15, 23, 42, 0.12)",
 };
 
 const menuBtnStyle: React.CSSProperties = {
@@ -614,7 +784,7 @@ const menuBtnStyle: React.CSSProperties = {
   padding: "10px 12px",
   background: "transparent",
   border: "none",
-  color: "white",
+  color: "#0f172a",
   textAlign: "left",
   cursor: "pointer",
   fontWeight: 600,
@@ -626,9 +796,9 @@ const editTextareaStyle: React.CSSProperties = {
   width: "100%",
   padding: 10,
   borderRadius: 12,
-  border: "1px solid rgba(255,255,255,0.10)",
-  background: "rgba(5,10,20,0.92)",
-  color: "white",
+  border: "1px solid rgba(148, 163, 184, 0.4)",
+  background: "rgba(255, 255, 255, 0.88)",
+  color: "#0f172a",
   resize: "vertical",
   outline: "none",
   boxSizing: "border-box",
@@ -656,9 +826,9 @@ const saveBtnStyle: React.CSSProperties = {
 const cancelBtnStyle: React.CSSProperties = {
   padding: "8px 14px",
   borderRadius: 12,
-  border: "1px solid rgba(255,255,255,0.10)",
-  background: "rgba(255,255,255,0.08)",
-  color: "white",
+  border: "1px solid rgba(148, 163, 184, 0.4)",
+  background: "rgba(255,255,255,0.7)",
+  color: "#0f172a",
   cursor: "pointer",
   fontWeight: 700,
   WebkitTapHighlightColor: "transparent",
@@ -679,20 +849,20 @@ const chatImageStyle: React.CSSProperties = {
   maxWidth: "260px",
   borderRadius: 14,
   display: "block",
-  border: "1px solid rgba(255,255,255,0.08)",
+  border: "1px solid rgba(148, 163, 184, 0.4)",
 };
 
 const timestampStyle: React.CSSProperties = {
   marginTop: 10,
   fontSize: 12,
-  color: "rgba(255,255,255,0.52)",
+  color: "rgba(15, 23, 42, 0.45)",
 };
 
 const composerStyle: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,0.08)",
+  border: "1px solid rgba(148, 163, 184, 0.4)",
   borderRadius: 20,
   padding: "clamp(12px, 3vw, 16px)",
-  background: "rgba(255,255,255,0.03)",
+  background: "rgba(255, 255, 255, 0.5)",
   display: "grid",
   gap: 14,
   minWidth: 0,
@@ -702,38 +872,152 @@ const composerTextareaStyle: React.CSSProperties = {
   width: "100%",
   padding: 14,
   borderRadius: 16,
-  border: "1px solid rgba(255,255,255,0.10)",
+  border: "1px solid rgba(148, 163, 184, 0.4)",
   resize: "vertical",
-  background: "rgba(5,10,20,0.92)",
-  color: "white",
+  background: "rgba(255, 255, 255, 0.88)",
+  color: "#0f172a",
   outline: "none",
   minHeight: 100,
   boxSizing: "border-box",
 };
 
-const fileRowStyle: React.CSSProperties = {
-  display: "flex",
-  gap: 12,
-  alignItems: "center",
-  flexWrap: "wrap",
-  flexDirection: "column",
+const fileInputHiddenStyle: React.CSSProperties = {
+  position: "absolute",
+  width: 1,
+  height: 1,
+  padding: 0,
+  margin: -1,
+  overflow: "hidden",
+  clip: "rect(0, 0, 0, 0)",
+  whiteSpace: "nowrap",
+  border: 0,
 };
 
-const fileInputStyle: React.CSSProperties = {
-  color: "white",
-  maxWidth: "100%",
+const composerToolsRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "stretch",
+  gap: 8,
+  minWidth: 0,
   width: "100%",
 };
 
-const fileChipStyle: React.CSSProperties = {
-  padding: "10px 12px",
-  borderRadius: 999,
-  background: "rgba(59,130,246,0.14)",
-  border: "1px solid rgba(96,165,250,0.20)",
-  fontSize: 13,
-  wordBreak: "break-word",
+const composerAttachCompactStyle: React.CSSProperties = {
+  flexShrink: 0,
+  width: 44,
+  height: 44,
+  borderRadius: 12,
+  border: "1px solid rgba(59, 130, 246, 0.38)",
+  background: "rgba(239, 246, 255, 0.9)",
+  display: "grid",
+  placeItems: "center",
+  cursor: "pointer",
+  WebkitTapHighlightColor: "transparent",
+  touchAction: "manipulation",
+  boxShadow: "0 1px 0 rgba(255, 255, 255, 0.7) inset",
+};
+
+const emojiPickerOverlayStyle: React.CSSProperties = {
+  position: "fixed",
+  inset: 0,
+  zIndex: 10000,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: 12,
+  background: "rgba(15, 23, 42, 0.45)",
+  backdropFilter: "blur(4px)",
+  WebkitBackdropFilter: "blur(4px)",
+};
+
+const emojiPickerDialogStyle: React.CSSProperties = {
+  width: "min(100%, 400px)",
+  maxWidth: "100%",
+  maxHeight: "min(90vh, 640px)",
+  display: "flex",
+  flexDirection: "column",
+  borderRadius: 20,
+  overflow: "hidden",
+  background: "rgba(255, 255, 255, 0.98)",
+  border: "1px solid rgba(148, 163, 184, 0.35)",
+  boxShadow: "0 24px 60px rgba(15, 23, 42, 0.2)",
+  minWidth: 0,
+};
+
+const emojiPickerHeaderStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 10,
+  padding: "10px 12px 8px",
+  borderBottom: "1px solid rgba(148, 163, 184, 0.28)",
+  flexShrink: 0,
+};
+
+const emojiPickerTitleStyle: React.CSSProperties = {
+  fontSize: 17,
+  fontWeight: 800,
+  color: "#0f172a",
+  letterSpacing: "-0.02em",
+};
+
+const emojiPickerCloseBtnStyle: React.CSSProperties = {
+  width: 40,
+  height: 40,
+  borderRadius: 10,
+  border: "1px solid rgba(148, 163, 184, 0.4)",
+  background: "rgba(248, 250, 252, 0.95)",
+  display: "grid",
+  placeItems: "center",
+  cursor: "pointer",
+  flexShrink: 0,
+  WebkitTapHighlightColor: "transparent",
+  touchAction: "manipulation",
+};
+
+const emojiPickerBodyStyle: React.CSSProperties = {
+  width: "100%",
+  minHeight: 0,
+  flex: 1,
+  overflow: "auto",
+  WebkitOverflowScrolling: "touch",
+};
+
+const fileChipCompactStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "6px 10px",
+  borderRadius: 12,
+  background: "rgba(59,130,246,0.12)",
+  border: "1px solid rgba(96,165,250,0.22)",
+  minWidth: 0,
   width: "100%",
   boxSizing: "border-box",
+};
+
+const fileChipNameStyle: React.CSSProperties = {
+  flex: 1,
+  minWidth: 0,
+  fontSize: 13,
+  fontWeight: 600,
+  color: "#1e3a8a",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
+const fileChipClearStyle: React.CSSProperties = {
+  flexShrink: 0,
+  width: 32,
+  height: 32,
+  borderRadius: 8,
+  border: "none",
+  background: "rgba(255,255,255,0.85)",
+  display: "grid",
+  placeItems: "center",
+  cursor: "pointer",
+  WebkitTapHighlightColor: "transparent",
+  touchAction: "manipulation",
 };
 
 const sendBtnStyle: React.CSSProperties = {
