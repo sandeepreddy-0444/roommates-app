@@ -32,7 +32,6 @@ import {
   type AppThemeId,
 } from "@/app/lib/appTheme";
 import { MaterialIcon } from "@/components/MaterialIcon";
-
 import ExpensesPanel from "@/components/ExpensesPanel";
 import ChatPanel from "@/components/ChatPanel";
 import GroceryPanel from "@/components/GroceryPanel";
@@ -44,6 +43,7 @@ import SettlementsPanel from "@/components/SettlementsPanel";
 import PersonalPaymentsPanel from "@/components/PersonalPaymentsPanel";
 import ThisMonthPanel from "@/components/ThisMonthPanel";
 import VotingPollsPanel from "../../components/VotingPollsPanel";
+import HowToUsePanel from "@/components/HowToUsePanel";
 import { RegisterPushNotifications } from "@/components/RegisterPushNotifications";
 
 type Tab = "home" | "expenses" | "chat" | "profile";
@@ -57,7 +57,8 @@ type ToolPanel =
   | "settlements"
   | "personalPayments"
   | "thisMonth"
-  | "polls";
+  | "polls"
+  | "help";
 type MonthKey = { year: number; month: number };
 type Roommate = { uid: string; name: string };
 
@@ -643,6 +644,7 @@ export default function DashboardPage() {
               {toolPanel === "polls" && groupId && uid ? (
                 <VotingPollsPanel groupId={groupId} myUid={uid} myName={myName || "Roommate"} />
               ) : null}
+              {toolPanel === "help" ? <HowToUsePanel isRoomAdmin={!!uid && !!adminUid && uid === adminUid} /> : null}
             </section>
           ) : null}
 
@@ -737,6 +739,7 @@ const HOME_TOOLS: Array<{ id: ToolPanel; icon: string; label: string }> = [
   { id: "personalPayments", icon: "account_balance_wallet", label: "Personal pay" },
   { id: "thisMonth", icon: "calendar_month", label: "This month" },
   { id: "polls", icon: "how_to_vote", label: "Voting / Polls" },
+  { id: "help", icon: "menu_book", label: "How to use" },
 ];
 
 function HomeTab({
@@ -1593,6 +1596,7 @@ function toolTitle(id: ToolPanel): string {
     personalPayments: "Personal payments",
     thisMonth: "This month",
     polls: "Voting / Polls",
+    help: "How to use",
   };
   return labels[id];
 }
